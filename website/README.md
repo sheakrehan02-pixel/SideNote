@@ -1,6 +1,6 @@
-# Orbitalis Showcase Website
+# Side Note Showcase Website
 
-Simple pitch website for Orbitalis with an interactive eye-tracking prototype.
+Simple pitch website for Side Note with an interactive eye-tracking prototype.
 
 ## Run locally
 
@@ -36,3 +36,4 @@ Then open http://localhost:8000
 
 - **index.html** — Main pitch page
 - **demo.html** — Interactive eye-tracking prototype
+- **logo.svg** — Brand logo
