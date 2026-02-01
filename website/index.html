@@ -283,14 +283,19 @@
     <header class="hero">
       <img src="logo.svg" alt="Side Note" class="logo" width="64" height="64">
       <h1>Side Note</h1>
-      <p class="tagline">Eye tracking made simple — no expensive hardware required</p>
+      <p class="tagline">Reduce cheating in online exams — detect when students look at phones or notes</p>
       <span class="badge">Python + Web prototype</span>
     </header>
 
     <section>
+      <h2>Our goal</h2>
+      <p>Online exams make it easy to cheat: students glance at their phone, peek at notes, or use a second device. Proctors can't see everything. Side Note uses eye tracking to detect when attention leaves the screen — flagging suspicious glances toward phones, papers, or other devices.</p>
+      <p>No expensive hardware. No new cameras. Just the webcam students already have.</p>
+    </section>
+
+    <section>
       <h2>What is Side Note?</h2>
-      <p>Side Note is a real-time eye tracking application that works with your existing webcam. No special hardware, no subscriptions — just run it and start tracking gaze direction, iris position, and visual attention.</p>
-      <p>Built for accessibility research, UX testing, and anyone who wants to understand where users look.</p>
+      <p>Side Note is a real-time eye tracking application that works with your existing webcam. It tracks gaze direction and iris position to understand where someone is looking — on-screen or off.</p>
 
       <div class="features">
         <div class="feature">
@@ -325,6 +330,23 @@
     </section>
 
     <section>
+      <h2>Online courses & classes</h2>
+      <p>Side Note fits into the workflows schools and platforms already use:</p>
+      <ul style="color: var(--muted); margin: 12px 0 0 20px;">
+        <li style="margin-bottom: 8px;"><strong style="color: var(--text);">LMS integration</strong> — Embed the web prototype into Canvas, Moodle, or any exam platform. Students take tests in the browser; gaze data is captured in real time.</li>
+        <li style="margin-bottom: 8px;"><strong style="color: var(--text);">Proctoring add-on</strong> — Works alongside existing proctoring tools. When gaze leaves the screen for more than a few seconds, flag it for review.</li>
+        <li style="margin-bottom: 8px;"><strong style="color: var(--text);">Live classes</strong> — Monitor engagement during video lectures. See when attention drops or students look away.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Why it scales</h2>
+      <p><strong>No extra hardware.</strong> Every student has a laptop with a webcam. No need for Tobii trackers or specialized equipment.</p>
+      <p><strong>Browser-based.</strong> Deploy via a link. No installs, no IT headaches. Works on any device with a camera.</p>
+      <p><strong>From one class to millions.</strong> The same system handles a single classroom or a global MOOC. Add more users without adding more hardware.</p>
+    </section>
+
+    <section>
       <h2>How it works</h2>
       <p><strong>Desktop (Python):</strong> Uses OpenCV + MediaPipe Face Mesh to detect 468 facial landmarks. Iris and eye centers are used to compute gaze direction. A green box confirms when eyes are tracked.</p>
       <p><strong>Web prototype:</strong> WebGazer.js runs in the browser. Calibrate once, then gaze coordinates are mapped to the screen for testing without installation.</p>
@@ -349,7 +371,7 @@
     </section>
 
     <footer>
-      Side Note — Eye tracking for everyone. Pitch-ready prototype.
+      Side Note — Reduce cheating in online exams with eye tracking. Scalable. No extra hardware.
     </footer>
   </div>
 </body>
