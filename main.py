@@ -1,243 +1,273 @@
 #!/usr/bin/env python3
 """
-Eye tracking application using OpenCV and MediaPipe.
-Runs directly when executed.
+Side Note — Eye tracking + cheating detection for online exams.
+Uses gaze direction, hand position, and face position to flag suspicious behavior.
 """
 
 import cv2
 import mediapipe as mp
 import numpy as np
 import sys
+from collections import deque
+
+# --- Constants for cheating detection ---
+GAZE_DOWN_THRESHOLD = 0.02   # iris below eye center (normalized) = looking down
+GAZE_OFF_SCREEN_THRESHOLD = 0.08  # gaze too far left/right
+LAP_ZONE_Y = 0.55            # hands below this Y (normalized) = in lap zone
+HAND_NEAR_FACE_Y = 0.45      # hand above this = visible on camera (not in lap)
+SUSPICIOUS_FRAMES_NEEDED = 15   # ~0.5 sec at 30fps before flagging
+WARNING_FRAMES_NEEDED = 8       # fewer frames for warning
 
 
 class EyeTracker:
     """Eye tracking using MediaPipe Face Mesh."""
-    
+
     def __init__(self):
         self.mp_face_mesh = mp.solutions.face_mesh
         self.face_mesh = self.mp_face_mesh.FaceMesh(
             max_num_faces=1,
             refine_landmarks=True,
             min_detection_confidence=0.5,
-            min_tracking_confidence=0.5
+            min_tracking_confidence=0.5,
         )
-        self.mp_drawing = mp.solutions.drawing_utils
-        self.mp_drawing_styles = mp.solutions.drawing_styles
-        
-        # Eye landmark indices (left and right eye)
-        # MediaPipe Face Mesh has 468 landmarks
         self.LEFT_EYE_INDICES = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246]
         self.RIGHT_EYE_INDICES = [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398]
-        
-        # Iris landmarks (left and right)
         self.LEFT_IRIS_INDICES = [474, 475, 476, 477]
         self.RIGHT_IRIS_INDICES = [469, 470, 471, 472]
-        
+
     def get_eye_center(self, landmarks, eye_indices):
-        """Calculate the center point of an eye."""
-        eye_points = [landmarks[idx] for idx in eye_indices]
-        x_coords = [point.x for point in eye_points]
-        y_coords = [point.y for point in eye_points]
-        return np.mean(x_coords), np.mean(y_coords)
-    
+        pts = [landmarks[i] for i in eye_indices]
+        return np.mean([p.x for p in pts]), np.mean([p.y for p in pts])
+
     def get_iris_center(self, landmarks, iris_indices):
-        """Calculate the center point of an iris."""
-        iris_points = [landmarks[idx] for idx in iris_indices]
-        x_coords = [point.x for point in iris_points]
-        y_coords = [point.y for point in iris_points]
-        return np.mean(x_coords), np.mean(y_coords)
-    
-    def calculate_gaze_direction(self, eye_center, iris_center):
-        """Calculate gaze direction vector."""
-        dx = iris_center[0] - eye_center[0]
-        dy = iris_center[1] - eye_center[1]
-        return dx, dy
-    
+        pts = [landmarks[i] for i in iris_indices]
+        return np.mean([p.x for p in pts]), np.mean([p.y for p in pts])
+
     def get_face_bbox(self, landmarks, h, w):
-        """Calculate bounding box around the face."""
-        x_coords = [landmark.x * w for landmark in landmarks]
-        y_coords = [landmark.y * h for landmark in landmarks]
-        
-        x_min = int(min(x_coords))
-        x_max = int(max(x_coords))
-        y_min = int(min(y_coords))
-        y_max = int(max(y_coords))
-        
-        # Add some padding
-        padding = 20
-        x_min = max(0, x_min - padding)
-        y_min = max(0, y_min - padding)
-        x_max = min(w, x_max + padding)
-        y_max = min(h, y_max + padding)
-        
-        return x_min, y_min, x_max, y_max
-    
+        xs = [lm.x * w for lm in landmarks]
+        ys = [lm.y * h for lm in landmarks]
+        pad = 20
+        return (
+            max(0, int(min(xs)) - pad),
+            max(0, int(min(ys)) - pad),
+            min(w, int(max(xs)) + pad),
+            min(h, int(max(ys)) + pad),
+        )
+
     def process_frame(self, frame):
-        """Process a single frame and return gaze information."""
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = self.face_mesh.process(rgb_frame)
-        
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        results = self.face_mesh.process(rgb)
         h, w = frame.shape[:2]
         gaze_data = None
-        
+
         if results.multi_face_landmarks:
-            face_landmarks = results.multi_face_landmarks[0]
-            landmarks = face_landmarks.landmark
-            
-            # Get face bounding box and draw green box
-            x_min, y_min, x_max, y_max = self.get_face_bbox(landmarks, h, w)
-            cv2.rectangle(frame, (x_min, y_min), (x_max, y_max), (0, 255, 0), 3)
-            
-            # Draw "EYES TRACKED" label
-            label = "EYES TRACKED"
-            label_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)[0]
-            label_x = x_min
-            label_y = y_min - 10 if y_min > 30 else y_max + 30
-            cv2.rectangle(frame, (label_x, label_y - label_size[1] - 5), 
-                         (label_x + label_size[0] + 10, label_y + 5), (0, 255, 0), -1)
-            cv2.putText(frame, label, (label_x + 5, label_y), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
-            
-            # Get eye centers
-            left_eye_center = self.get_eye_center(landmarks, self.LEFT_EYE_INDICES)
-            right_eye_center = self.get_eye_center(landmarks, self.RIGHT_EYE_INDICES)
-            
-            # Get iris centers
-            left_iris_center = self.get_iris_center(landmarks, self.LEFT_IRIS_INDICES)
-            right_iris_center = self.get_iris_center(landmarks, self.RIGHT_IRIS_INDICES)
-            
-            # Calculate gaze directions
-            left_gaze = self.calculate_gaze_direction(left_eye_center, left_iris_center)
-            right_gaze = self.calculate_gaze_direction(right_eye_center, right_iris_center)
-            
-            # Average gaze direction
-            avg_gaze_x = (left_gaze[0] + right_gaze[0]) / 2
-            avg_gaze_y = (left_gaze[1] + right_gaze[1]) / 2
-            
-            # Convert to pixel coordinates
-            left_iris_px = (int(left_iris_center[0] * w), int(left_iris_center[1] * h))
-            right_iris_px = (int(right_iris_center[0] * w), int(right_iris_center[1] * h))
-            left_eye_px = (int(left_eye_center[0] * w), int(left_eye_center[1] * h))
-            right_eye_px = (int(right_eye_center[0] * w), int(right_eye_center[1] * h))
-            
-            # Draw eye landmarks and iris
-            for idx in self.LEFT_EYE_INDICES:
-                pt = landmarks[idx]
-                x, y = int(pt.x * w), int(pt.y * h)
-                cv2.circle(frame, (x, y), 2, (0, 255, 0), -1)
-            
-            for idx in self.RIGHT_EYE_INDICES:
-                pt = landmarks[idx]
-                x, y = int(pt.x * w), int(pt.y * h)
-                cv2.circle(frame, (x, y), 2, (0, 255, 0), -1)
-            
-            # Draw iris centers
-            cv2.circle(frame, left_iris_px, 5, (0, 0, 255), -1)
-            cv2.circle(frame, right_iris_px, 5, (0, 0, 255), -1)
-            
-            # Draw eye centers
-            cv2.circle(frame, left_eye_px, 3, (255, 0, 0), -1)
-            cv2.circle(frame, right_eye_px, 3, (255, 0, 0), -1)
-            
-            # Draw gaze vectors
-            gaze_scale = 100
-            left_gaze_end = (left_iris_px[0] + int(left_gaze[0] * gaze_scale * w), 
-                           left_iris_px[1] + int(left_gaze[1] * gaze_scale * h))
-            right_gaze_end = (right_iris_px[0] + int(right_gaze[0] * gaze_scale * w), 
-                            right_iris_px[1] + int(right_gaze[1] * gaze_scale * h))
-            
-            cv2.arrowedLine(frame, left_iris_px, left_gaze_end, (255, 255, 0), 2)
-            cv2.arrowedLine(frame, right_iris_px, right_gaze_end, (255, 255, 0), 2)
-            
+            lm = results.multi_face_landmarks[0].landmark
+            x_min, y_min, x_max, y_max = self.get_face_bbox(lm, h, w)
+            cv2.rectangle(frame, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2)
+
+            left_eye = self.get_eye_center(lm, self.LEFT_EYE_INDICES)
+            right_eye = self.get_eye_center(lm, self.RIGHT_EYE_INDICES)
+            left_iris = self.get_iris_center(lm, self.LEFT_IRIS_INDICES)
+            right_iris = self.get_iris_center(lm, self.RIGHT_IRIS_INDICES)
+
+            left_gaze = (left_iris[0] - left_eye[0], left_iris[1] - left_eye[1])
+            right_gaze = (right_iris[0] - right_eye[0], right_iris[1] - right_eye[1])
+            gaze_x = (left_gaze[0] + right_gaze[0]) / 2
+            gaze_y = (left_gaze[1] + right_gaze[1]) / 2
+
+            # Face center (nose-ish) for "looking down" vs "face tilted"
+            face_center_y = np.mean([p.y for p in lm])
             gaze_data = {
-                'left_iris': left_iris_px,
-                'right_iris': right_iris_px,
-                'gaze_x': avg_gaze_x,
-                'gaze_y': avg_gaze_y,
-                'left_gaze': left_gaze,
-                'right_gaze': right_gaze
+                "gaze_x": gaze_x,
+                "gaze_y": gaze_y,
+                "face_center_y": face_center_y,
+                "left_iris": (int(left_iris[0] * w), int(left_iris[1] * h)),
+                "right_iris": (int(right_iris[0] * w), int(right_iris[1] * h)),
             }
-        
+
+            # Draw iris
+            cv2.circle(frame, gaze_data["left_iris"], 5, (0, 0, 255), -1)
+            cv2.circle(frame, gaze_data["right_iris"], 5, (0, 0, 255), -1)
+
         return frame, gaze_data
 
 
+class HandDetector:
+    """Hand landmarks using MediaPipe Hands."""
+
+    def __init__(self):
+        self.mp_hands = mp.solutions.hands
+        self.hands = self.mp_hands.Hands(
+            static_image_mode=False,
+            max_num_hands=2,
+            min_detection_confidence=0.5,
+            min_tracking_confidence=0.5,
+        )
+
+    def process_frame(self, frame):
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        results = self.hands.process(rgb)
+        hand_data = []
+        h, w = frame.shape[:2]
+        if results.multi_hand_landmarks:
+            for hand_lm in results.multi_hand_landmarks:
+                # Wrist = 0, middle finger MCP = 9
+                wrist = hand_lm.landmark[0]
+                hand_center_y = np.mean([p.y for p in hand_lm.landmark])
+                hand_center_x = np.mean([p.x for p in hand_lm.landmark])
+                hand_data.append({
+                    "wrist_y": wrist.y,
+                    "wrist_x": wrist.x,
+                    "center_y": hand_center_y,
+                    "center_x": hand_center_x,
+                    "in_lap_zone": wrist.y > LAP_ZONE_Y,
+                })
+                # Draw landmarks
+                for pt in hand_lm.landmark:
+                    px, py = int(pt.x * w), int(pt.y * h)
+                    cv2.circle(frame, (px, py), 3, (255, 200, 0), -1)
+        return frame, hand_data
+
+
+class CheatingDetector:
+    """
+    Flags suspicious behavior:
+    - Looking down (gaze) → likely phone/notes in lap
+    - Hands in lap zone while looking down → high suspicion
+    - Gaze off-screen (left/right) for long → second device
+    - No face detected → person left or turned away
+    """
+
+    def __init__(self):
+        self.history = deque(maxlen=30)  # ~1 sec at 30fps
+
+    def update(self, gaze_data, hand_data, face_visible):
+        reasons = []
+        # Normalized: origin top-left, y increases downward
+        if not face_visible:
+            reasons.append("face_not_visible")
+            self.history.append(reasons)
+            return self._evaluate(reasons)
+
+        gaze_y = gaze_data["gaze_y"]
+        gaze_x = gaze_data["gaze_x"]
+
+        # Looking down (iris below eye center in image = positive dy)
+        if gaze_y > GAZE_DOWN_THRESHOLD:
+            reasons.append("looking_down")
+
+        # Gaze far left or right (off screen)
+        if abs(gaze_x) > GAZE_OFF_SCREEN_THRESHOLD:
+            reasons.append("gaze_off_screen")
+
+        # Hands in lap (bottom of frame)
+        hands_in_lap = sum(1 for h in hand_data if h["in_lap_zone"])
+        if hands_in_lap >= 1:
+            reasons.append("hand_in_lap")
+        if hands_in_lap >= 2:
+            reasons.append("both_hands_lap")
+
+        # High risk: looking down + at least one hand in lap (like holding phone)
+        if "looking_down" in reasons and ("hand_in_lap" in reasons or "both_hands_lap" in reasons):
+            reasons.append("phone_risk")
+
+        self.history.append(reasons)
+        status, display_reasons, color = self._evaluate(reasons)
+        if status == "ok":
+            display_reasons = []
+        return status, display_reasons, color
+
+    def _evaluate(self, reasons):
+        if not reasons:
+            return "ok", [], (0, 255, 0)
+
+        # Count how many recent frames had each reason
+        recent = list(self.history)[-SUSPICIOUS_FRAMES_NEEDED:]
+        count_looking_down = sum(1 for r in recent if "looking_down" in r)
+        count_phone_risk = sum(1 for r in recent if "phone_risk" in r)
+        count_off_screen = sum(1 for r in recent if "gaze_off_screen" in r)
+        count_hand_lap = sum(1 for r in recent if "hand_in_lap" in r or "both_hands_lap" in r)
+
+        # Suspicious: sustained looking down + hands in lap
+        if count_phone_risk >= SUSPICIOUS_FRAMES_NEEDED:
+            return "suspicious", ["Looking down at lap + hands in lap (possible phone)"], (0, 0, 255)
+        if count_looking_down >= SUSPICIOUS_FRAMES_NEEDED:
+            return "suspicious", ["Sustained looking down (possible notes/phone)"], (0, 0, 255)
+        if count_off_screen >= SUSPICIOUS_FRAMES_NEEDED:
+            return "suspicious", ["Looking off-screen (possible second device)"], (0, 0, 255)
+
+        # Warning: shorter duration or single signals
+        if count_phone_risk >= WARNING_FRAMES_NEEDED or count_looking_down >= WARNING_FRAMES_NEEDED:
+            return "warning", ["Brief look down / hands in lap"], (0, 165, 255)
+        if count_hand_lap >= WARNING_FRAMES_NEEDED:
+            return "warning", ["Hands in lap zone"], (0, 165, 255)
+        if "face_not_visible" in reasons:
+            return "warning", ["Face not visible"], (0, 165, 255)
+
+        return "ok", [], (0, 255, 0)
+
+
 def main():
-    """Main function to run eye tracking."""
-    print("Starting Orbitalis - Eye Tracking...")
+    print("Side Note — Eye tracking + cheating detection")
     print("Press 'q' to quit")
-    
-    # Initialize camera
+    print("Rules: looking down = lap/phone risk; hands in lap = suspicious; gaze off-screen = second device")
+
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
         print("Error: Could not open camera")
         sys.exit(1)
-    
-    # Set camera resolution
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-    
-    # Initialize eye tracker
-    tracker = EyeTracker()
-    
-    frame_count = 0
-    
+
+    eye_tracker = EyeTracker()
+    hand_detector = HandDetector()
+    cheating_detector = CheatingDetector()
+
     try:
         while True:
             ret, frame = cap.read()
             if not ret:
-                print("Error: Failed to capture frame")
                 break
-            
-            # Flip frame horizontally for mirror effect
             frame = cv2.flip(frame, 1)
-            
-            # Process frame
-            processed_frame, gaze_data = tracker.process_frame(frame)
-            
-            # Display gaze information
-            if gaze_data:
-                info_text = [
-                    f"Status: TRACKING",  # Green status when tracking
-                    f"Left Iris: {gaze_data['left_iris']}",
-                    f"Right Iris: {gaze_data['right_iris']}",
-                    f"Gaze X: {gaze_data['gaze_x']:.4f}",
-                    f"Gaze Y: {gaze_data['gaze_y']:.4f}"
-                ]
-                
-                y_offset = 30
-                # Draw status in green
-                cv2.putText(processed_frame, "Status: TRACKING", (10, y_offset),
-                          cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-                
-                # Draw other info
-                for i, text in enumerate(info_text[1:], 1):
-                    cv2.putText(processed_frame, text, (10, y_offset + i * 25),
-                              cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-                    cv2.putText(processed_frame, text, (10, y_offset + i * 25),
-                              cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1)
+            h, w = frame.shape[:2]
+
+            # Run pipelines
+            frame, gaze_data = eye_tracker.process_frame(frame)
+            frame, hand_data = hand_detector.process_frame(frame)
+
+            face_visible = gaze_data is not None
+            if gaze_data is None:
+                gaze_data = {}
+
+            status, reasons, color = cheating_detector.update(gaze_data, hand_data, face_visible)
+
+            # Status panel
+            panel_h = 120
+            cv2.rectangle(frame, (0, 0), (w, panel_h), (40, 40, 50), -1)
+            cv2.rectangle(frame, (0, 0), (w, panel_h), (60, 60, 70), 1)
+
+            status_text = f"Status: {status.upper()}"
+            cv2.putText(frame, status_text, (12, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
+            if reasons:
+                for i, r in enumerate(reasons[:3]):
+                    cv2.putText(frame, f"  - {r}", (12, 58 + i * 22), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
             else:
-                cv2.putText(processed_frame, "Status: NO FACE DETECTED", (10, 30),
-                          cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-            
-            # Display frame
-            cv2.imshow('Orbitalis - Eye Tracking', processed_frame)
-            
-            # Print gaze data every 30 frames (approximately once per second)
-            frame_count += 1
-            if frame_count % 30 == 0 and gaze_data:
-                print(f"Gaze - X: {gaze_data['gaze_x']:.4f}, Y: {gaze_data['gaze_y']:.4f} | "
-                      f"Left Iris: {gaze_data['left_iris']}, Right Iris: {gaze_data['right_iris']}")
-            
-            # Exit on 'q' key press
-            if cv2.waitKey(1) & 0xFF == ord('q'):
+                cv2.putText(frame, "  - Eyes on screen, posture OK", (12, 58), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (150, 255, 150), 1)
+
+            # Lap zone line (visual guide)
+            lap_y = int(LAP_ZONE_Y * h)
+            cv2.line(frame, (0, lap_y), (w, lap_y), (80, 80, 80), 1)
+            cv2.putText(frame, "lap zone below", (w - 140, lap_y - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (100, 100, 100), 1)
+
+            cv2.imshow("Side Note — Cheating Detection", frame)
+            if cv2.waitKey(1) & 0xFF == ord("q"):
                 break
-                
     except KeyboardInterrupt:
-        print("\nStopping Orbitalis...")
+        pass
     finally:
         cap.release()
         cv2.destroyAllWindows()
-        print("Orbitalis stopped.")
+        print("Side Note stopped.")
 
 
 if __name__ == "__main__":

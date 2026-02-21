@@ -42,6 +42,10 @@ python main.py
 - MediaPipe
 - NumPy
 
+## Training the model
+
+For datasets, papers, and ideas to train or improve the gaze and cheating-detection model, see **[docs/TRAINING_RESOURCES.md](docs/TRAINING_RESOURCES.md)** (gaze datasets like ETH-XGaze, MPIIGaze, Gaze360; proctoring datasets like Mendeley suspicious behaviors and MSU OEP; and suggested pipelines).
+
 ## Notes
 
 - Make sure you're in a well-lit environment for better tracking accuracy
