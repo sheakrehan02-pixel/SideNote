@@ -72,6 +72,13 @@
       z-index: 9999;
       display: none;
     }
+    /* WebGazer video and canvas - keep visible so prediction points show */
+    #webgazerVideoContainer, #webgazerVideoFeed, #webgazerCanvas {
+      position: fixed !important;
+      top: 80px !important;
+      right: 16px !important;
+      z-index: 9998 !important;
+    }
   </style>
 </head>
 <body>
@@ -131,6 +138,21 @@
       setTimeout(initWhenReady, 200);
     }
 
+    var gazeLoopId = null;
+    function updateGazeDot(x, y) {
+      if (x == null || y == null || !tracking) return;
+      var px = Math.max(0, Math.min(x, window.innerWidth));
+      var py = Math.max(0, Math.min(y, window.innerHeight));
+      gazeDot.style.left = px + 'px';
+      gazeDot.style.top = py + 'px';
+    }
+    function runGazeLoop() {
+      if (!tracking || typeof webgazer.getCurrentPrediction !== 'function') return;
+      var p = webgazer.getCurrentPrediction();
+      if (p && typeof p.x === 'number' && typeof p.y === 'number') updateGazeDot(p.x, p.y);
+      gazeLoopId = requestAnimationFrame(runGazeLoop);
+    }
+
     startBtn.onclick = function() {
       if (tracking) return;
       if (typeof webgazer === 'undefined') {
@@ -142,22 +164,22 @@
       gazeDot.style.left = '50%';
       gazeDot.style.top = '50%';
       try {
-        webgazer.setGazeListener(function(data) {
+        var onGaze = function(data) {
           if (!tracking) return;
-          if (data && typeof data.x === 'number' && typeof data.y === 'number') {
-            gazeDot.style.left = Math.max(0, Math.min(data.x, window.innerWidth)) + 'px';
-            gazeDot.style.top = Math.max(0, Math.min(data.y, window.innerHeight)) + 'px';
-          }
-        });
-        webgazer.begin();
+          if (data && typeof data.x === 'number' && typeof data.y === 'number')
+            updateGazeDot(data.x, data.y);
+        };
         if (typeof webgazer.showVideo === 'function') webgazer.showVideo(true);
         else if (typeof webgazer.showVideoPreview === 'function') webgazer.showVideoPreview(true);
-        if (typeof webgazer.showPredictionPoints === 'function') webgazer.showPredictionPoints(true);
+        var wg = webgazer.setGazeListener(onGaze);
+        if (wg && typeof wg.showPredictionPoints === 'function') wg.showPredictionPoints(true);
+        if (wg && typeof wg.begin === 'function') wg.begin(); else webgazer.begin();
         tracking = true;
         startBtn.disabled = true;
         stopBtn.disabled = false;
         calibrateBtn.disabled = false;
-        setStatus('Tracking active — green dot follows your gaze. Look at the dot; calibrate when it appears.', true);
+        setStatus('Tracking active — green dot follows your gaze. Red dot shows prediction. Click Calibrate to improve accuracy.', true);
+        runGazeLoop();
       } catch (err) {
         gazeDot.style.display = 'none';
         setStatus('Error: ' + (err.message || err));
@@ -167,6 +189,7 @@
 
     stopBtn.onclick = function() {
       if (!tracking) return;
+      if (gazeLoopId != null) { cancelAnimationFrame(gazeLoopId); gazeLoopId = null; }
       try {
         webgazer.end();
       } catch (e) {}
@@ -183,9 +206,10 @@
       try {
         if (typeof webgazer.showPredictionPoints === 'function') webgazer.showPredictionPoints(true);
         if (typeof webgazer.setRegression === 'function') webgazer.setRegression('ridge');
+        if (typeof webgazer.addMouseEventListeners === 'function') webgazer.addMouseEventListeners();
         calibrateBtn.disabled = true;
-        setStatus('Look at each red dot as it appears. Calibration improves accuracy.', true);
-        setTimeout(function() { calibrateBtn.disabled = false; }, 8000);
+        setStatus('Look at each red dot as it appears. Click where you look to add calibration points.', true);
+        setTimeout(function() { calibrateBtn.disabled = false; }, 10000);
       } catch (e) {
         setStatus('Calibration error: ' + (e.message || e));
       }
