@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Side Note — Try the Prototype</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
-  <script src="https://webgazer.cs.brown.edu/webgazer.js" crossorigin="anonymous"></script>
+  <script src="js/webgazer.js" onerror="window._webgazerLoadFailed=1"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -105,14 +105,30 @@
       statusEl.classList.toggle('active', !!active);
     }
 
+    var loadCheckCount = 0;
     function initWhenReady() {
-      if (typeof webgazer === 'undefined') {
-        setStatus('Loading eye-tracking library...');
-        setTimeout(initWhenReady, 100);
+      if (typeof webgazer !== 'undefined') {
+        startBtn.disabled = false;
+        setStatus('Click "Start tracking" and allow camera access when prompted.');
         return;
       }
-      startBtn.disabled = false;
-      setStatus('Click "Start tracking" and allow camera access when prompted.');
+      loadCheckCount++;
+      if (loadCheckCount === 20 && !window._webgazerCDNFailed) {
+        setStatus('Local script failed, loading from CDN...');
+        var s = document.createElement('script');
+        s.src = 'https://webgazer.cs.brown.edu/webgazer.js';
+        s.crossOrigin = 'anonymous';
+        s.onload = function() { setTimeout(initWhenReady, 100); };
+        s.onerror = function() { window._webgazerCDNFailed = true; };
+        document.head.appendChild(s);
+        return;
+      }
+      if (loadCheckCount > 50) {
+        setStatus('Eye-tracking library could not load. Use http://localhost (e.g. http://localhost:8000/demo.html) and allow camera.');
+        return;
+      }
+      setStatus('Loading eye-tracking library...');
+      setTimeout(initWhenReady, 200);
     }
 
     startBtn.onclick = function() {
@@ -122,29 +138,38 @@
         return;
       }
       setStatus('Initializing camera...');
+      gazeDot.style.display = 'block';
+      gazeDot.style.left = '50%';
+      gazeDot.style.top = '50%';
       try {
         webgazer.setGazeListener(function(data) {
-          if (!data || !tracking) return;
-          var x = data.x, y = data.y;
-          if (typeof x !== 'number' || typeof y !== 'number') return;
-          gazeDot.style.display = 'block';
-          gazeDot.style.left = Math.max(0, Math.min(x, window.innerWidth)) + 'px';
-          gazeDot.style.top = Math.max(0, Math.min(y, window.innerHeight)) + 'px';
-        }).begin();
-        if (typeof webgazer.showVideo === 'function') {
-          webgazer.showVideo(true);
-        } else if (typeof webgazer.showVideoPreview === 'function') {
-          webgazer.showVideoPreview(true);
+          if (!tracking) return;
+          if (data && typeof data.x === 'number' && typeof data.y === 'number') {
+            gazeDot.style.left = Math.max(0, Math.min(data.x, window.innerWidth)) + 'px';
+            gazeDot.style.top = Math.max(0, Math.min(data.y, window.innerHeight)) + 'px';
+          }
+        });
+        var result = webgazer.begin();
+        function whenReady() {
+          if (typeof webgazer.showVideo === 'function') webgazer.showVideo(true);
+          else if (typeof webgazer.showVideoPreview === 'function') webgazer.showVideoPreview(true);
+          if (typeof webgazer.showPredictionPoints === 'function') webgazer.showPredictionPoints(true);
+          tracking = true;
+          startBtn.disabled = true;
+          stopBtn.disabled = false;
+          calibrateBtn.disabled = false;
+          setStatus('Tracking active — green dot follows your gaze. Look at the dot; calibrate when it appears.', true);
         }
-        if (typeof webgazer.showPredictionPoints === 'function') {
-          webgazer.showPredictionPoints(true);
+        if (result && typeof result.then === 'function') {
+          result.then(whenReady).catch(function(err) {
+            setStatus('Camera error: ' + (err.message || err));
+            gazeDot.style.display = 'none';
+          });
+        } else {
+          whenReady();
         }
-        tracking = true;
-        startBtn.disabled = true;
-        stopBtn.disabled = false;
-        calibrateBtn.disabled = false;
-        setStatus('Tracking active — the green dot follows your gaze. Try calibrating for better accuracy.', true);
       } catch (err) {
+        gazeDot.style.display = 'none';
         setStatus('Error: ' + (err.message || err));
         console.error(err);
       }
@@ -168,7 +193,9 @@
       try {
         if (typeof webgazer.showPredictionPoints === 'function') webgazer.showPredictionPoints(true);
         if (typeof webgazer.setRegression === 'function') webgazer.setRegression('ridge');
-        setStatus('Look at each prediction point as it appears...', true);
+        calibrateBtn.disabled = true;
+        setStatus('Look at each red dot as it appears. Calibration improves accuracy.', true);
+        setTimeout(function() { calibrateBtn.disabled = false; }, 8000);
       } catch (e) {
         setStatus('Calibration error: ' + (e.message || e));
       }
