@@ -149,25 +149,15 @@
             gazeDot.style.top = Math.max(0, Math.min(data.y, window.innerHeight)) + 'px';
           }
         });
-        var result = webgazer.begin();
-        function whenReady() {
-          if (typeof webgazer.showVideo === 'function') webgazer.showVideo(true);
-          else if (typeof webgazer.showVideoPreview === 'function') webgazer.showVideoPreview(true);
-          if (typeof webgazer.showPredictionPoints === 'function') webgazer.showPredictionPoints(true);
-          tracking = true;
-          startBtn.disabled = true;
-          stopBtn.disabled = false;
-          calibrateBtn.disabled = false;
-          setStatus('Tracking active — green dot follows your gaze. Look at the dot; calibrate when it appears.', true);
-        }
-        if (result && typeof result.then === 'function') {
-          result.then(whenReady).catch(function(err) {
-            setStatus('Camera error: ' + (err.message || err));
-            gazeDot.style.display = 'none';
-          });
-        } else {
-          whenReady();
-        }
+        webgazer.begin();
+        if (typeof webgazer.showVideo === 'function') webgazer.showVideo(true);
+        else if (typeof webgazer.showVideoPreview === 'function') webgazer.showVideoPreview(true);
+        if (typeof webgazer.showPredictionPoints === 'function') webgazer.showPredictionPoints(true);
+        tracking = true;
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+        calibrateBtn.disabled = false;
+        setStatus('Tracking active — green dot follows your gaze. Look at the dot; calibrate when it appears.', true);
       } catch (err) {
         gazeDot.style.display = 'none';
         setStatus('Error: ' + (err.message || err));
