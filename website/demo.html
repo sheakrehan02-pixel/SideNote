@@ -5,7 +5,28 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Side Note — Try the Prototype</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
-  <script src="js/webgazer.js" onerror="window._webgazerLoadFailed=1"></script>
+  <!-- Load WebGazer from official CDN first (best compatibility). Fallback to local if CDN fails. -->
+  <script>
+    (function() {
+      var done = false;
+      function tryLocal() {
+        if (done) return;
+        done = true;
+        var s = document.createElement('script');
+        s.src = 'js/webgazer.js';
+        s.onload = function() { window._webgazerSource = 'local'; };
+        s.onerror = function() { window._webgazerSource = 'none'; };
+        document.head.appendChild(s);
+      }
+      var s = document.createElement('script');
+      s.src = 'https://webgazer.cs.brown.edu/webgazer.js';
+      s.crossOrigin = 'anonymous';
+      s.onload = function() { done = true; window._webgazerSource = 'cdn'; };
+      s.onerror = tryLocal;
+      document.head.appendChild(s);
+      setTimeout(function() { if (!done) tryLocal(); }, 8000);
+    })();
+  </script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -97,6 +118,7 @@
 
   <p style="max-width:800px;margin:0 auto;color:#8b949e;font-size:0.9rem;">
     After starting, look at the green dot — it follows your gaze. Click "Calibrate" and look at each point for better accuracy.
+    Good lighting and a visible face help. If the dot doesn&apos;t move, try the <strong>Python app</strong> in the project root: <code>python main.py</code> (uses MediaPipe, no browser).
   </p>
 
   <script>
@@ -116,22 +138,16 @@
     function initWhenReady() {
       if (typeof webgazer !== 'undefined') {
         startBtn.disabled = false;
-        setStatus('Click "Start tracking" and allow camera access when prompted.');
+        var src = window._webgazerSource || 'script';
+        setStatus('Click "Start tracking" and allow camera. (Library: ' + src + ')');
         return;
       }
       loadCheckCount++;
-      if (loadCheckCount === 20 && !window._webgazerCDNFailed) {
-        setStatus('Local script failed, loading from CDN...');
-        var s = document.createElement('script');
-        s.src = 'https://webgazer.cs.brown.edu/webgazer.js';
-        s.crossOrigin = 'anonymous';
-        s.onload = function() { setTimeout(initWhenReady, 100); };
-        s.onerror = function() { window._webgazerCDNFailed = true; };
-        document.head.appendChild(s);
-        return;
+      if (loadCheckCount === 25 && typeof webgazer === 'undefined') {
+        setStatus('Trying local WebGazer script...');
       }
       if (loadCheckCount > 50) {
-        setStatus('Eye-tracking library could not load. Use http://localhost (e.g. http://localhost:8000/demo.html) and allow camera.');
+        setStatus('Eye-tracking library could not load. Use https or http://localhost (e.g. http://localhost:8000/demo.html), allow camera. Or run the Python app: python main.py');
         return;
       }
       setStatus('Loading eye-tracking library...');
