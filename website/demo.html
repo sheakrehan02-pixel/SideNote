@@ -3,239 +3,166 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Side Note — Try the Prototype</title>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
-  <!-- Load WebGazer from official CDN first (best compatibility). Fallback to local if CDN fails. -->
+  <title>Side Note — Proctoring Demo</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/demo.css">
   <script>
-    (function() {
+    window.saveDataAcrossSessions = false;
+    (function () {
       var done = false;
       function tryLocal() {
         if (done) return;
         done = true;
         var s = document.createElement('script');
         s.src = 'js/webgazer.js';
-        s.onload = function() { window._webgazerSource = 'local'; };
-        s.onerror = function() { window._webgazerSource = 'none'; };
+        s.onload = function () { window._webgazerSource = 'local'; };
+        s.onerror = function () { window._webgazerSource = 'none'; };
         document.head.appendChild(s);
       }
       var s = document.createElement('script');
       s.src = 'https://webgazer.cs.brown.edu/webgazer.js';
       s.crossOrigin = 'anonymous';
-      s.onload = function() { done = true; window._webgazerSource = 'cdn'; };
+      s.onload = function () { done = true; window._webgazerSource = 'cdn'; };
       s.onerror = tryLocal;
       document.head.appendChild(s);
-      setTimeout(function() { if (!done) tryLocal(); }, 8000);
+      setTimeout(function () { if (!done) tryLocal(); }, 8000);
     })();
   </script>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: 'DM Sans', sans-serif;
-      background: #0a0e17;
-      color: #e6edf3;
-      min-height: 100vh;
-      padding: 24px;
-    }
-    .header {
-      max-width: 800px;
-      margin: 0 auto 24px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 16px;
-    }
-    .header h1 { font-size: 1.5rem; }
-    .header a {
-      color: #00d4aa;
-      text-decoration: none;
-      font-size: 0.9rem;
-    }
-    .header a:hover { text-decoration: underline; }
-    .controls {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-    .btn {
-      padding: 10px 20px;
-      border-radius: 8px;
-      border: none;
-      font-size: 0.95rem;
-      font-weight: 500;
-      cursor: pointer;
-      font-family: inherit;
-    }
-    .btn-primary { background: #00d4aa; color: #0a0e17; }
-    .btn-primary:hover { background: #00a884; }
-    .btn-secondary { background: transparent; border: 1px solid #1e2733; color: #e6edf3; }
-    .btn-secondary:hover { border-color: #8b949e; }
-    .status {
-      max-width: 800px;
-      margin: 0 auto 16px;
-      padding: 12px 16px;
-      background: #131920;
-      border-radius: 8px;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.9rem;
-      color: #8b949e;
-    }
-    .status.active { color: #00d4aa; }
-    #gazeDot {
-      position: fixed;
-      width: 20px;
-      height: 20px;
-      border-radius: 50%;
-      background: #00d4aa;
-      border: 3px solid rgba(0,212,170,0.5);
-      pointer-events: none;
-      transform: translate(-50%, -50%);
-      z-index: 9999;
-      display: none;
-    }
-    /* WebGazer video and canvas - keep visible so prediction points show */
-    #webgazerVideoContainer, #webgazerVideoFeed, #webgazerCanvas {
-      position: fixed !important;
-      top: 80px !important;
-      right: 16px !important;
-      z-index: 9998 !important;
-    }
-  </style>
 </head>
 <body>
-  <div class="header">
-    <h1><img src="logo.svg" alt="" width="28" height="28" style="vertical-align: middle; margin-right: 8px;"> Side Note — Gaze Tracking Demo</h1>
-    <a href="index.html">← Back to overview</a>
-    <div class="controls">
-      <button class="btn btn-primary" id="startBtn">Start tracking</button>
-      <button class="btn btn-secondary" id="calibrateBtn" disabled>Calibrate</button>
-      <button class="btn btn-secondary" id="stopBtn" disabled>Stop</button>
-    </div>
+  <div class="app-shell" id="wizard">
+    <header class="top-bar">
+      <h1>
+        <img src="logo.svg" alt="" width="28" height="28">
+        Side Note — Exam Proctoring
+      </h1>
+      <nav class="step-track" aria-label="Setup progress">
+        <span class="step-dot active" data-step-indicator title="Welcome"></span>
+        <span class="step-dot" data-step-indicator title="Checklist"></span>
+        <span class="step-dot" data-step-indicator title="Calibrate"></span>
+        <span class="step-dot" data-step-indicator title="Validate"></span>
+        <span class="step-dot" data-step-indicator title="Exam"></span>
+        <span class="step-dot" data-step-indicator title="Report"></span>
+      </nav>
+      <a href="index.html">← Overview</a>
+    </header>
+
+    <section class="panel" data-step-panel>
+      <h2>Welcome</h2>
+      <div id="libraryStatus" class="lib-status">Loading WebGazer…</div>
+      <p>This demo runs <strong>real webcam eye tracking</strong> in your browser. Accuracy depends on lighting, camera placement, and calibration — follow every step for best results.</p>
+      <p><strong>Best browsers:</strong> Chrome or Edge on a laptop with a built-in webcam.</p>
+      <div class="setup-link">
+        First time? Read the setup guide: <a href="SETUP.md" target="_blank">SETUP.md</a>
+      </div>
+      <div class="btn-row">
+        <button type="button" class="btn btn-primary" id="btnStartCamera">Allow camera &amp; continue →</button>
+      </div>
+    </section>
+
+    <section class="panel" data-step-panel hidden>
+      <h2>Before you calibrate</h2>
+      <p>WebGazer maps your eye features to screen coordinates. These conditions matter more than any software tweak:</p>
+      <ul class="checklist">
+        <li><strong>Lighting</strong>Face lit evenly from the front. Avoid backlighting (window behind you).</li>
+        <li><strong>Distance</strong>Sit arm's length from the screen (~50–70 cm). Keep that distance during the exam.</li>
+        <li><strong>Head still</strong>Move your eyes, not your head, when looking around the screen.</li>
+        <li><strong>Camera</strong>Webcam at eye level. Glasses are OK; sunglasses are not.</li>
+        <li><strong>Full screen</strong>Maximize this window. Calibration is tied to your screen size.</li>
+      </ul>
+      <div class="btn-row">
+        <button type="button" class="btn btn-secondary" id="btnBackChecklist">← Back</button>
+        <button type="button" class="btn btn-primary" id="btnReadyChecklist">I'm ready — calibrate →</button>
+      </div>
+    </section>
+
+    <section class="panel" data-step-panel hidden>
+      <h2>9-point calibration</h2>
+      <p>For each point: <strong>look at the green circle</strong>, then <strong>click it</strong>. WebGazer learns where your eyes point on <em>this</em> screen.</p>
+      <p>A small camera preview appears bottom-left — your face should stay in frame the whole time.</p>
+      <div class="btn-row">
+        <button type="button" class="btn btn-primary" id="btnRunCalibration">Start 9-point calibration</button>
+      </div>
+      <p class="progress-text" id="calProgress"></p>
+      <div class="btn-row">
+        <button type="button" class="btn btn-primary" id="btnAfterCal" disabled>Continue to accuracy check →</button>
+      </div>
+    </section>
+
+    <section class="panel" data-step-panel hidden>
+      <h2>Accuracy check</h2>
+      <p>We'll show 5 dots. <strong>Look at each dot</strong> (don't click). This measures how well tracking matches your gaze.</p>
+      <div class="btn-row">
+        <button type="button" class="btn btn-primary" id="btnRunValidation">Run accuracy check</button>
+        <button type="button" class="btn btn-secondary" id="btnRecalibrate" disabled>← Recalibrate</button>
+      </div>
+      <p class="validation-result" id="validationResult"></p>
+      <div class="btn-row">
+        <button type="button" class="btn btn-primary" id="btnStartExam" disabled>Start practice exam →</button>
+      </div>
+    </section>
+
+    <section class="panel" data-step-panel hidden>
+      <div class="exam-layout">
+        <div id="exam-content">
+          <h3>Practice exam — Biology (sample)</h3>
+          <div class="question-block">
+            <label for="q1">1. What organelle is known as the powerhouse of the cell?</label>
+            <input type="text" id="q1" placeholder="Your answer">
+          </div>
+          <div class="question-block">
+            <label for="q2">2. Describe photosynthesis in one or two sentences.</label>
+            <textarea id="q2" placeholder="Your answer"></textarea>
+          </div>
+          <div class="question-block">
+            <label for="q3">3. Name the four bases in DNA.</label>
+            <input type="text" id="q3" placeholder="Your answer">
+          </div>
+          <p style="color: var(--muted); font-size: 0.85rem; margin-top: 8px;">
+            Try looking at the bottom of the screen or far left/right briefly — the proctor panel will flag sustained off-screen gaze.
+          </p>
+        </div>
+        <aside class="proctor-panel">
+          <h4>Integrity monitor</h4>
+          <div class="exam-meta">Time: <span id="examTimer">00:00</span></div>
+          <div class="status-badge" id="statusBadge" style="background:#00d4aa">OK</div>
+          <ul id="statusMessages"><li class="ok-msg">Eyes on exam content</li></ul>
+          <h4>Live log</h4>
+          <ul id="eventLog"></ul>
+          <label class="toggle-row">
+            <input type="checkbox" id="toggleGazeDot" checked>
+            Show gaze dot (debug)
+          </label>
+          <div class="zone-legend">
+            <p><span class="zone-warn"></span> Bottom zone = lap/desk</p>
+            <p><span class="zone-flag"></span> Left/right edges = off-screen</p>
+          </div>
+          <div class="btn-row" style="margin-top:16px">
+            <button type="button" class="btn btn-danger" id="btnFinishExam">Submit exam</button>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="panel" data-step-panel hidden>
+      <h2>Session report</h2>
+      <p>Integrity score (demo heuristic — not a legal proctoring verdict):</p>
+      <div class="score-ring"><span id="integrityScore">100</span>/100</div>
+      <div id="reportSummary"></div>
+      <h3 style="margin-top:20px;font-size:1rem">Incident log</h3>
+      <ul id="reportEvents"></ul>
+      <div class="btn-row">
+        <button type="button" class="btn btn-secondary" id="btnDownloadReport">Download JSON report</button>
+        <button type="button" class="btn btn-primary" id="btnRestart">Start over</button>
+      </div>
+    </section>
   </div>
-  <div class="status" id="status">Click "Start tracking" and allow camera access when prompted.</div>
 
-  <div id="gazeDot"></div>
+  <div id="gazeDot" aria-hidden="true"></div>
+  <div id="calOverlay" aria-live="polite"></div>
 
-  <p style="max-width:800px;margin:0 auto;color:#8b949e;font-size:0.9rem;">
-    After starting, look at the green dot — it follows your gaze. Click "Calibrate" and look at each point for better accuracy.
-    Good lighting and a visible face help. If the dot doesn&apos;t move, try the <strong>Python app</strong> in the project root: <code>python main.py</code> (uses MediaPipe, no browser).
-  </p>
-
-  <script>
-    const startBtn = document.getElementById('startBtn');
-    const stopBtn = document.getElementById('stopBtn');
-    const calibrateBtn = document.getElementById('calibrateBtn');
-    const statusEl = document.getElementById('status');
-    const gazeDot = document.getElementById('gazeDot');
-    let tracking = false;
-
-    function setStatus(msg, active) {
-      statusEl.textContent = msg;
-      statusEl.classList.toggle('active', !!active);
-    }
-
-    var loadCheckCount = 0;
-    function initWhenReady() {
-      if (typeof webgazer !== 'undefined') {
-        startBtn.disabled = false;
-        var src = window._webgazerSource || 'script';
-        setStatus('Click "Start tracking" and allow camera. (Library: ' + src + ')');
-        return;
-      }
-      loadCheckCount++;
-      if (loadCheckCount === 25 && typeof webgazer === 'undefined') {
-        setStatus('Trying local WebGazer script...');
-      }
-      if (loadCheckCount > 50) {
-        setStatus('Eye-tracking library could not load. Use https or http://localhost (e.g. http://localhost:8000/demo.html), allow camera. Or run the Python app: python main.py');
-        return;
-      }
-      setStatus('Loading eye-tracking library...');
-      setTimeout(initWhenReady, 200);
-    }
-
-    var gazeLoopId = null;
-    function updateGazeDot(x, y) {
-      if (x == null || y == null || !tracking) return;
-      var px = Math.max(0, Math.min(x, window.innerWidth));
-      var py = Math.max(0, Math.min(y, window.innerHeight));
-      gazeDot.style.left = px + 'px';
-      gazeDot.style.top = py + 'px';
-    }
-    function runGazeLoop() {
-      if (!tracking || typeof webgazer.getCurrentPrediction !== 'function') return;
-      var p = webgazer.getCurrentPrediction();
-      if (p && typeof p.x === 'number' && typeof p.y === 'number') updateGazeDot(p.x, p.y);
-      gazeLoopId = requestAnimationFrame(runGazeLoop);
-    }
-
-    startBtn.onclick = function() {
-      if (tracking) return;
-      if (typeof webgazer === 'undefined') {
-        setStatus('WebGazer not loaded yet. Please wait and try again.');
-        return;
-      }
-      setStatus('Initializing camera...');
-      gazeDot.style.display = 'block';
-      gazeDot.style.left = '50%';
-      gazeDot.style.top = '50%';
-      try {
-        var onGaze = function(data) {
-          if (!tracking) return;
-          if (data && typeof data.x === 'number' && typeof data.y === 'number')
-            updateGazeDot(data.x, data.y);
-        };
-        if (typeof webgazer.showVideo === 'function') webgazer.showVideo(true);
-        else if (typeof webgazer.showVideoPreview === 'function') webgazer.showVideoPreview(true);
-        var wg = webgazer.setGazeListener(onGaze);
-        if (wg && typeof wg.showPredictionPoints === 'function') wg.showPredictionPoints(true);
-        if (wg && typeof wg.begin === 'function') wg.begin(); else webgazer.begin();
-        tracking = true;
-        startBtn.disabled = true;
-        stopBtn.disabled = false;
-        calibrateBtn.disabled = false;
-        setStatus('Tracking active — green dot follows your gaze. Red dot shows prediction. Click Calibrate to improve accuracy.', true);
-        runGazeLoop();
-      } catch (err) {
-        gazeDot.style.display = 'none';
-        setStatus('Error: ' + (err.message || err));
-        console.error(err);
-      }
-    };
-
-    stopBtn.onclick = function() {
-      if (!tracking) return;
-      if (gazeLoopId != null) { cancelAnimationFrame(gazeLoopId); gazeLoopId = null; }
-      try {
-        webgazer.end();
-      } catch (e) {}
-      tracking = false;
-      gazeDot.style.display = 'none';
-      startBtn.disabled = false;
-      stopBtn.disabled = true;
-      calibrateBtn.disabled = true;
-      setStatus('Stopped. Click "Start tracking" to try again.');
-    };
-
-    calibrateBtn.onclick = function() {
-      if (!tracking) return;
-      try {
-        if (typeof webgazer.showPredictionPoints === 'function') webgazer.showPredictionPoints(true);
-        if (typeof webgazer.setRegression === 'function') webgazer.setRegression('ridge');
-        if (typeof webgazer.addMouseEventListeners === 'function') webgazer.addMouseEventListeners();
-        calibrateBtn.disabled = true;
-        setStatus('Look at each red dot as it appears. Click where you look to add calibration points.', true);
-        setTimeout(function() { calibrateBtn.disabled = false; }, 10000);
-      } catch (e) {
-        setStatus('Calibration error: ' + (e.message || e));
-      }
-    };
-
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', initWhenReady);
-    } else {
-      initWhenReady();
-    }
-  </script>
+  <script src="js/gaze-engine.js"></script>
+  <script src="js/cheating-detector.js"></script>
+  <script src="js/app.js"></script>
 </body>
 </html>

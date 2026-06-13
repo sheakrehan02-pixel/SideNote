@@ -7,10 +7,12 @@ Simple pitch website for Side Note with an interactive eye-tracking prototype.
 From this folder:
 
 ```bash
-python -m http.server 8000
+python3 -m http.server 8000
 ```
 
-Then open http://localhost:8000
+Then open **http://localhost:8000/demo.html** (not `file://` — camera requires HTTP).
+
+**First time?** Read **[SETUP.md](SETUP.md)** for lighting, calibration, and troubleshooting.
 
 ## Deploy to Vercel
 
@@ -35,5 +37,10 @@ Then open http://localhost:8000
 ## Files
 
 - **index.html** — Main pitch page
-- **demo.html** — Interactive eye-tracking prototype
+- **demo.html** — Guided proctoring demo (calibration → exam → report)
+- **SETUP.md** — Step-by-step setup and troubleshooting
+- **css/demo.css** — Demo styles
+- **js/gaze-engine.js** — WebGazer wrapper
+- **js/cheating-detector.js** — Integrity rules
+- **js/app.js** — Wizard logic
 - **logo.svg** — Brand logo
