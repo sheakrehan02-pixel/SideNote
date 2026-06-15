@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Side Note — Sessions</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/demo.css">
+  <style>
+    table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 0.9rem; }
+    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-weight: 500; }
+    .score-ok { color: var(--accent); }
+    .score-warn { color: var(--warning); }
+    .score-bad { color: var(--danger); }
+    code { font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="top-bar">
+      <h1><img src="logo.svg" alt="" width="28" height="28"> Side Note — Sessions</h1>
+      <a href="demo.html">← Demo</a>
+    </header>
+    <section class="panel">
+      <h2>Submitted exam sessions</h2>
+      <p>Requires the backend: <code>python run_server.py</code></p>
+      <div id="status" class="lib-status">Loading…</div>
+      <div id="tableWrap"></div>
+    </section>
+  </div>
+  <script>
+    fetch('/api/sessions?limit=100')
+      .then(function (r) { return r.json(); })
+      .then(function (rows) {
+        document.getElementById('status').textContent = rows.length + ' session(s) found';
+        document.getElementById('status').className = 'lib-status ok';
+        if (!rows.length) {
+          document.getElementById('tableWrap').innerHTML = '<p style="color:var(--muted)">No sessions yet. Complete a demo exam first.</p>';
+          return;
+        }
+        var html = '<table><thead><tr><th>Created</th><th>Status</th><th>Score</th><th>Flags</th><th>Session ID</th></tr></thead><tbody>';
+        rows.forEach(function (s) {
+          var score = s.integrity_score != null ? s.integrity_score : '—';
+          var cls = score >= 80 ? 'score-ok' : score >= 60 ? 'score-warn' : 'score-bad';
+          html += '<tr><td>' + (s.created_at || '') + '</td><td>' + s.status + '</td><td class="' + cls + '">' + score + '</td><td>' + (s.suspicious_count || 0) + '</td><td><code>' + s.id + '</code></td></tr>';
+        });
+        html += '</tbody></table>';
+        document.getElementById('tableWrap').innerHTML = html;
+      })
+      .catch(function () {
+        document.getElementById('status').textContent = 'Could not reach backend. Run python run_server.py from project root.';
+        document.getElementById('status').className = 'lib-status err';
+      });
+  </script>
+</body>
+</html>

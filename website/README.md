@@ -4,13 +4,29 @@ Simple pitch website for Side Note with an interactive eye-tracking prototype.
 
 ## Run locally
 
-From this folder:
+**Recommended — backend + website together:**
+
+From the project root:
 
 ```bash
+pip install -r requirements.txt
+python run_server.py
+```
+
+| URL | What |
+|-----|------|
+| http://localhost:8000/demo.html | Proctoring demo |
+| http://localhost:8000/sessions.html | View saved sessions |
+| http://localhost:8000/api/health | API health check |
+
+**Static-only (no session storage):**
+
+```bash
+cd website
 python3 -m http.server 8000
 ```
 
-Then open **http://localhost:8000/demo.html** (not `file://` — camera requires HTTP).
+Then open **http://localhost:8000/demo.html** (reports won’t save to the backend).
 
 **First time?** Read **[SETUP.md](SETUP.md)** for lighting, calibration, and troubleshooting.
 

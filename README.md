@@ -1,54 +1,40 @@
-# Orbitalis - Eye Tracking
+# Side Note — Eye Tracking & Proctoring
 
-A real-time eye tracking application using OpenCV and MediaPipe that runs directly from Python.
+Real-time eye tracking and exam integrity monitoring. **Web demo** (WebGazer + FastAPI backend) and **desktop app** (MediaPipe + OpenCV).
 
-## Features
+## Quick start (web + backend)
 
-- Real-time eye tracking using MediaPipe Face Mesh
-- Iris and gaze direction detection
-- Visual feedback with landmarks and gaze vectors
-- Direct Python execution (no web browser required)
-
-## Setup
-
-1. Install dependencies:
 ```bash
+python3 -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
+python run_server.py
 ```
 
-2. Run the application:
+| URL | Purpose |
+|-----|---------|
+| http://localhost:8000/demo.html | Proctoring demo |
+| http://localhost:8000/sessions.html | View saved sessions |
+| http://localhost:8000/api/health | API status |
+
+See **`backend/README.md`** and **`website/SETUP.md`** for full docs.
+
+## Desktop app (hands + iris)
+
 ```bash
+pip install -r requirements.txt
 python main.py
 ```
 
-## Usage
+Press `q` to quit.
 
-1. **Run the script**: Execute `python main.py`
-2. **Camera access**: The application will access your webcam automatically
-3. **Position yourself**: Make sure your face is well-lit and visible to the camera
-4. **View tracking**: The window will show:
-   - Green dots: Eye landmarks
-   - Red dots: Iris centers
-   - Blue dots: Eye centers
-   - Yellow arrows: Gaze direction vectors
-   - Text overlay: Gaze coordinates and iris positions
-5. **Exit**: Press 'q' key to quit
+## Features
 
-## Requirements
+- **Web:** 9-point calibration, gaze tracking, integrity flags, session storage
+- **Desktop:** Iris gaze, hand-in-lap detection, phone-risk heuristics
+- **Backend:** FastAPI + SQLite — sessions, events, reports
 
-- Python 3.7+
-- Webcam/camera access
-- OpenCV
-- MediaPipe
-- NumPy
+## Training
 
-## Training the model
-
-For datasets, papers, and ideas to train or improve the gaze and cheating-detection model, see **[docs/TRAINING_RESOURCES.md](docs/TRAINING_RESOURCES.md)** (gaze datasets like ETH-XGaze, MPIIGaze, Gaze360; proctoring datasets like Mendeley suspicious behaviors and MSU OEP; and suggested pipelines).
-
-## Notes
-
-- Make sure you're in a well-lit environment for better tracking accuracy
-- Keep your face visible to the camera (within 1-2 feet)
-- The application displays gaze data both visually and in the console
+See **[docs/TRAINING_RESOURCES.md](docs/TRAINING_RESOURCES.md)** for datasets and ML pipeline ideas.
 

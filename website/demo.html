@@ -50,6 +50,7 @@
     <section class="panel" data-step-panel>
       <h2>Welcome</h2>
       <div id="libraryStatus" class="lib-status">Loading WebGazer…</div>
+      <div id="apiStatus" class="lib-status">Checking backend…</div>
       <p>This demo runs <strong>real webcam eye tracking</strong> in your browser. Accuracy depends on lighting, camera placement, and calibration — follow every step for best results.</p>
       <p><strong>Best browsers:</strong> Chrome or Edge on a laptop with a built-in webcam.</p>
       <div class="setup-link">
@@ -161,6 +162,7 @@
   <div id="gazeDot" aria-hidden="true"></div>
   <div id="calOverlay" aria-live="polite"></div>
 
+  <script src="js/api-client.js"></script>
   <script src="js/gaze-engine.js"></script>
   <script src="js/cheating-detector.js"></script>
   <script src="js/app.js"></script>

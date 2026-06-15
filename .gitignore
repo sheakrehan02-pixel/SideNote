@@ -34,3 +34,9 @@ wheels/
 .DS_Store
 Thumbs.db
 
+# Backend data
+data/
+
+# Virtual environment
+.venv/
+

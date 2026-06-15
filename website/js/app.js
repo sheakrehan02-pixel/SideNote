@@ -11,6 +11,8 @@
   var lastStatus = 'ok';
   var showGazeDot = true;
   var faceMissCount = 0;
+  var lastCalibration = null;
+  var serverSessionId = null;
 
   var els = {};
 
@@ -58,6 +60,9 @@
     if (result.status !== lastStatus) {
       if (detector) detector.logEvent(result.status, result.messages);
       appendLiveLog(result);
+      if (typeof SideNoteAPI !== 'undefined') {
+        SideNoteAPI.recordEvent(result.status, result.messages);
+      }
       lastStatus = result.status;
     }
   }
@@ -145,6 +150,15 @@
 
     SideNoteGaze.runValidation(els.calOverlay).then(function (result) {
       btn.disabled = false;
+      lastCalibration = {
+        points_completed: 9,
+        cancelled: false,
+        avg_error_px: result.avgErrorPx,
+        passed: result.passed
+      };
+      if (typeof SideNoteAPI !== 'undefined' && SideNoteAPI.isOnline()) {
+        SideNoteAPI.saveCalibration(lastCalibration);
+      }
       var msg = 'Average error: ' + Math.round(result.avgErrorPx) + ' px. ';
       if (result.passed) {
         msg += 'Good enough — start the exam.';
@@ -164,8 +178,15 @@
     lastStatus = 'ok';
     examStartTime = Date.now();
     faceMissCount = 0;
+    serverSessionId = null;
     if (els.eventLog) els.eventLog.innerHTML = '';
     setProctorStatus({ status: 'ok', messages: [], color: '#00d4aa' });
+
+    if (typeof SideNoteAPI !== 'undefined') {
+      SideNoteAPI.createSession(null).then(function (session) {
+        serverSessionId = session.id;
+      }).catch(function () {});
+    }
 
     SideNoteGaze.resetSmoothing();
     SideNoteGaze.start(onGaze).then(function () {
@@ -194,16 +215,40 @@
     if (window._faceCheckInterval) clearInterval(window._faceCheckInterval);
     SideNoteGaze.stop();
     if (els.gazeDot) els.gazeDot.style.display = 'none';
-    nextStep();
+
+    if (detector && typeof SideNoteAPI !== 'undefined' && SideNoteAPI.isOnline()) {
+      var report = detector.getReport();
+      report.durationSeconds = examStartTime
+        ? Math.floor((Date.now() - examStartTime) / 1000)
+        : 0;
+      report.calibration = lastCalibration;
+      report.viewport = { width: window.innerWidth, height: window.innerHeight };
+      SideNoteAPI.submitReport(report).then(function (saved) {
+        if (saved && saved.id) serverSessionId = saved.id;
+        nextStep();
+      }).catch(function () { nextStep(); });
+    } else {
+      nextStep();
+    }
   }
 
   function renderReport() {
     var report = detector ? detector.getReport() : { integrityScore: 100, suspiciousCount: 0, warningCount: 0, events: [] };
     if (els.integrityScore) els.integrityScore.textContent = report.integrityScore;
+    var sessionLine = '';
+    if (serverSessionId) {
+      sessionLine = '<p><strong>Session ID:</strong> <code>' + serverSessionId + '</code></p>';
+    } else if (typeof SideNoteAPI !== 'undefined' && SideNoteAPI.getSessionId()) {
+      sessionLine = '<p><strong>Session ID:</strong> <code>' + SideNoteAPI.getSessionId() + '</code></p>';
+    }
     if (els.reportSummary) {
       els.reportSummary.innerHTML =
+        sessionLine +
         '<p><strong>Integrity score:</strong> ' + report.integrityScore + '/100</p>' +
-        '<p><strong>Warnings:</strong> ' + report.warningCount + ' · <strong>Flags:</strong> ' + report.suspiciousCount + '</p>';
+        '<p><strong>Warnings:</strong> ' + report.warningCount + ' · <strong>Flags:</strong> ' + report.suspiciousCount + '</p>' +
+        (typeof SideNoteAPI !== 'undefined' && SideNoteAPI.isOnline()
+          ? '<p class="ok-msg" style="color:var(--accent,#00d4aa)">Report saved to backend.</p>'
+          : '<p style="color:#8b949e">Offline mode — download JSON to keep a copy.</p>');
     }
     if (els.reportEvents) {
       els.reportEvents.innerHTML = report.events.length
@@ -242,7 +287,10 @@
     $('btnDownloadReport').addEventListener('click', downloadReport);
     $('btnRestart').addEventListener('click', function () {
       SideNoteGaze.stop();
+      if (typeof SideNoteAPI !== 'undefined') SideNoteAPI.resetSession();
       detector = null;
+      serverSessionId = null;
+      lastCalibration = null;
       $('btnAfterCal').disabled = true;
       $('btnStartExam').disabled = true;
       $('btnRecalibrate').disabled = true;
@@ -258,14 +306,31 @@
 
   function initLibraryStatus() {
     var el = $('libraryStatus');
-    SideNoteGaze.waitForWebGazer().then(function () {
-      var src = window._webgazerSource || 'loaded';
+    var apiEl = $('apiStatus');
+
+    function showWebGazer(src) {
       el.textContent = 'WebGazer ready (' + src + '). Use Chrome or Edge for best results.';
       el.className = 'lib-status ok';
+    }
+
+    SideNoteGaze.waitForWebGazer().then(function () {
+      showWebGazer(window._webgazerSource || 'loaded');
     }).catch(function (err) {
       el.textContent = err.message;
       el.className = 'lib-status err';
     });
+
+    if (typeof SideNoteAPI !== 'undefined' && apiEl) {
+      SideNoteAPI.checkHealth().then(function (online) {
+        if (online) {
+          apiEl.textContent = 'Backend connected — sessions will be saved automatically.';
+          apiEl.className = 'lib-status ok';
+        } else {
+          apiEl.textContent = 'Backend offline — run: python run_server.py (demo still works locally).';
+          apiEl.className = 'lib-status err';
+        }
+      });
+    }
   }
 
   function init() {

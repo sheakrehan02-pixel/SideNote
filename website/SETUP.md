@@ -21,20 +21,27 @@ python main.py
 
 ---
 
-## Step 2: Run a local web server
+## Step 2: Run the backend (recommended)
 
-WebGazer **will not work** if you double-click `demo.html` (`file://`). You must use HTTP.
+From the **project root**:
 
-From the `website` folder:
+```bash
+pip install -r requirements.txt
+python run_server.py
+```
+
+Open: **http://localhost:8000/demo.html**
+
+The backend saves exam sessions to `data/sidenote.db`. View them at **http://localhost:8000/sessions.html**.
+
+### Static-only fallback
 
 ```bash
 cd website
 python3 -m http.server 8000
 ```
 
-Open: **http://localhost:8000/demo.html**
-
-Allow **camera access** when the browser asks.
+Works for eye tracking, but **no session storage**.
 
 ---
 
