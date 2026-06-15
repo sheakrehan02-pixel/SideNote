@@ -377,6 +377,19 @@ a:hover { text-decoration: underline; }
   z-index: 10002;
 }
 
+.val-gaze-dot {
+  position: fixed;
+  width: 16px;
+  height: 16px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: rgba(255, 176, 32, 0.9);
+  border: 2px solid #fff;
+  z-index: 10003;
+  display: none;
+  pointer-events: none;
+}
+
 .score-ring {
   font-size: 3rem;
   font-weight: 700;

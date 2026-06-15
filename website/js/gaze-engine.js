@@ -14,8 +14,10 @@
   var state = {
     active: false,
     calibrating: false,
+    validating: false,
     smoothX: null,
     smoothY: null,
+    latestGaze: null,
     listener: null,
     rafId: null
   };
@@ -53,6 +55,45 @@
     state.smoothY = null;
   }
 
+  /**
+   * WebGazer getCurrentPrediction() is async (returns a Promise) in current builds.
+   */
+  function readPrediction() {
+    if (!hasWebGazer()) return Promise.resolve(state.latestGaze);
+
+    var wg = global.webgazer;
+    if (typeof wg.getCurrentPrediction !== 'function') {
+      return Promise.resolve(state.latestGaze);
+    }
+
+    try {
+      var result = wg.getCurrentPrediction();
+      if (result && typeof result.then === 'function') {
+        return result.then(function (p) {
+          var b = boundGaze(p);
+          if (b) state.latestGaze = b;
+          return b || state.latestGaze;
+        }).catch(function () {
+          return state.latestGaze;
+        });
+      }
+      var b = boundGaze(result);
+      if (b) state.latestGaze = b;
+      return Promise.resolve(b || state.latestGaze);
+    } catch (e) {
+      return Promise.resolve(state.latestGaze);
+    }
+  }
+
+  function onGazeData(data) {
+    if (!state.active) return;
+    var b = boundGaze(data);
+    if (b) state.latestGaze = b;
+    if (state.calibrating) return;
+    var s = smoothGaze(data);
+    if (s && state.listener) state.listener(s);
+  }
+
   function styleWebGazerPreview() {
     var ids = ['webgazerVideoContainer', 'webgazerVideoFeed', 'webgazerCanvas'];
     ids.forEach(function (id) {
@@ -77,9 +118,7 @@
     if (!wg) return;
 
     if (typeof wg.setRegression === 'function') {
-      try { wg.setRegression('weightedRidge'); } catch (e) {
-        try { wg.setRegression('ridge'); } catch (e2) {}
-      }
+      try { wg.setRegression('ridge'); } catch (e) {}
     }
     if (typeof wg.setTracker === 'function') {
       try { wg.setTracker('TFFacemesh'); } catch (e) {}
@@ -89,7 +128,7 @@
       wg.params.showFaceOverlay = true;
       wg.params.showFaceFeedbackBox = true;
     }
-    if (typeof wg.showPredictionPoints === 'function') wg.showPredictionPoints(false);
+    if (typeof wg.showPredictionPoints === 'function') wg.showPredictionPoints(true);
     if (typeof wg.showVideo === 'function') wg.showVideo(true);
     else if (typeof wg.showVideoPreview === 'function') wg.showVideoPreview(true);
 
@@ -99,9 +138,16 @@
 
   function clearTrainingData() {
     var wg = global.webgazer;
-    if (!wg) return;
-    if (typeof wg.clearData === 'function') wg.clearData();
-    else if (typeof wg.clearStoredData === 'function') wg.clearStoredData();
+    if (!wg) return Promise.resolve();
+    state.latestGaze = null;
+    resetSmoothing();
+    if (typeof wg.clearData === 'function') {
+      return Promise.resolve(wg.clearData());
+    }
+    if (typeof wg.clearStoredData === 'function') {
+      wg.clearStoredData();
+    }
+    return Promise.resolve();
   }
 
   function waitForWebGazer(maxAttempts, intervalMs) {
@@ -112,7 +158,9 @@
       function tick() {
         if (hasWebGazer()) return resolve(global.webgazer);
         attempts += 1;
-        if (attempts >= maxAttempts) return reject(new Error('WebGazer failed to load. Use http://localhost:8000/demo.html over HTTPS or localhost.'));
+        if (attempts >= maxAttempts) {
+          return reject(new Error('WebGazer failed to load. Use http://localhost:8000/demo.html'));
+        }
         global.setTimeout(tick, intervalMs);
       }
       tick();
@@ -120,7 +168,10 @@
   }
 
   function start(onGaze) {
-    if (state.active) return Promise.resolve();
+    if (state.active) {
+      state.listener = onGaze || state.listener;
+      return Promise.resolve();
+    }
     return waitForWebGazer().then(function () {
       configureWebGazer();
       state.listener = onGaze || null;
@@ -128,21 +179,17 @@
       resetSmoothing();
 
       var wg = global.webgazer;
-      var chain = wg.setGazeListener(function (data) {
-        if (!state.active || state.calibrating) return;
-        var s = smoothGaze(data);
-        if (s && state.listener) state.listener(s);
-      });
+      var chain = wg.setGazeListener(onGazeData);
       if (chain && typeof chain.begin === 'function') chain.begin();
       else wg.begin();
 
       function loop() {
         if (!state.active) return;
-        if (typeof wg.getCurrentPrediction === 'function') {
-          var p = wg.getCurrentPrediction();
-          var s = smoothGaze(p);
-          if (s && state.listener) state.listener(s);
-        }
+        readPrediction().then(function (b) {
+          if (!b || state.calibrating || !state.listener) return;
+          var s = smoothGaze(b);
+          if (s) state.listener(s);
+        });
         state.rafId = global.requestAnimationFrame(loop);
       }
       state.rafId = global.requestAnimationFrame(loop);
@@ -151,6 +198,7 @@
 
   function stop() {
     state.active = false;
+    state.validating = false;
     if (state.rafId != null) {
       global.cancelAnimationFrame(state.rafId);
       state.rafId = null;
@@ -159,14 +207,7 @@
       if (hasWebGazer()) global.webgazer.end();
     } catch (e) {}
     resetSmoothing();
-  }
-
-  function pause() {
-    if (hasWebGazer() && typeof global.webgazer.pause === 'function') global.webgazer.pause();
-  }
-
-  function resume() {
-    if (hasWebGazer() && typeof global.webgazer.resume === 'function') global.webgazer.resume();
+    state.latestGaze = null;
   }
 
   function enableMouseCalibration() {
@@ -181,19 +222,24 @@
     }
   }
 
-  /**
-   * Guided 9-point calibration. User looks at each dot and clicks it.
-   * Returns { pointsCompleted, cancelled }.
-   */
   function runCalibration(overlayEl, onProgress) {
     if (!overlayEl) return Promise.reject(new Error('Calibration overlay missing'));
 
     state.calibrating = true;
-    clearTrainingData();
-    enableMouseCalibration();
-
     var completed = 0;
     var cancelled = false;
+
+    return clearTrainingData().then(function () {
+      enableMouseCalibration();
+      return showPoint(0);
+    }).then(function () {
+      overlayEl.classList.remove('visible');
+      overlayEl.innerHTML = '';
+      disableMouseCalibration();
+      state.calibrating = false;
+      resetSmoothing();
+      return { pointsCompleted: completed, cancelled: cancelled };
+    });
 
     function showPoint(index) {
       return new Promise(function (resolve) {
@@ -211,35 +257,23 @@
               '<p>Keep your head still. <strong>Look at the circle</strong>, then <strong>click it</strong>.</p>' +
               '<p class="cal-tip">Face the camera. Good lighting on your face helps a lot.</p>' +
             '</div>' +
-            '<button type="button" class="cal-target" id="calTarget" style="left:' + px + 'px;top:' + py + 'px;" aria-label="Calibration point ' + (index + 1) + '">' +
+            '<button type="button" class="cal-target" id="calTarget" style="left:' + px + 'px;top:' + py + 'px;">' +
               '<span class="cal-target-ring"></span>' +
               '<span class="cal-target-core"></span>' +
             '</button>' +
-            '<button type="button" class="btn btn-secondary cal-skip" id="calCancel">Cancel calibration</button>' +
+            '<button type="button" class="btn btn-secondary cal-skip" id="calCancel">Cancel</button>' +
           '</div>';
-
         overlayEl.classList.add('visible');
 
         var target = document.getElementById('calTarget');
         var cancelBtn = document.getElementById('calCancel');
-        var hitRadius = 80;
 
-        function advance(ev) {
-          var cx = px;
-          var cy = py;
-          if (ev) {
-            cx = ev.clientX;
-            cy = ev.clientY;
-          }
-          var dx = cx - px;
-          var dy = cy - py;
-          if (Math.sqrt(dx * dx + dy * dy) > hitRadius && ev) return;
-
+        function advance() {
           completed += 1;
           if (onProgress) onProgress(completed, CAL_POINTS.length);
           target.removeEventListener('click', advance);
           cancelBtn.removeEventListener('click', onCancel);
-          global.setTimeout(function () { resolve(showPoint(index + 1)); }, 350);
+          global.setTimeout(function () { resolve(showPoint(index + 1)); }, 300);
         }
 
         function onCancel() {
@@ -253,71 +287,127 @@
         cancelBtn.addEventListener('click', onCancel);
       });
     }
+  }
 
-    return showPoint(0).then(function () {
-      overlayEl.classList.remove('visible');
-      overlayEl.innerHTML = '';
-      disableMouseCalibration();
-      state.calibrating = false;
-      resetSmoothing();
-      return { pointsCompleted: completed, cancelled: cancelled };
+  function getPassThresholdPx() {
+    var d = Math.sqrt(global.innerWidth * global.innerWidth + global.innerHeight * global.innerHeight);
+    return Math.max(280, Math.min(500, d * 0.22));
+  }
+
+  function warmupAfterCalibration(ms) {
+    ms = ms || 2500;
+    resetSmoothing();
+    return new Promise(function (resolve) {
+      var waited = 0;
+      var tick = global.setInterval(function () {
+        readPrediction();
+        waited += 200;
+        if (waited >= ms) {
+          global.clearInterval(tick);
+          resolve();
+        }
+      }, 200);
     });
   }
 
-  /**
-   * Accuracy check: show a dot, sample gaze for ~1.2s, measure pixel error.
-   */
   function runValidation(overlayEl) {
-    var testPoints = [
-      [0.25, 0.25], [0.75, 0.25], [0.5, 0.5], [0.25, 0.75], [0.75, 0.75]
-    ];
+    var testPoints = [CAL_POINTS[0], CAL_POINTS[2], CAL_POINTS[4], CAL_POINTS[6], CAL_POINTS[8]];
     var errors = [];
+    var passThreshold = getPassThresholdPx();
+    state.validating = true;
+
+    function waitMs(ms) {
+      return new Promise(function (resolve) { global.setTimeout(resolve, ms); });
+    }
 
     function sampleAtPoint(index) {
-      return new Promise(function (resolve) {
-        if (index >= testPoints.length) return resolve();
+      if (index >= testPoints.length) return Promise.resolve();
 
-        var nx = testPoints[index][0];
-        var ny = testPoints[index][1];
-        var px = nx * global.innerWidth;
-        var py = ny * global.innerHeight;
+      var nx = testPoints[index][0];
+      var ny = testPoints[index][1];
+      var px = nx * global.innerWidth;
+      var py = ny * global.innerHeight;
 
-        overlayEl.innerHTML =
-          '<div class="cal-backdrop validation-mode">' +
-            '<div class="cal-instructions">' +
-              '<h2>Accuracy check ' + (index + 1) + ' / ' + testPoints.length + '</h2>' +
-              '<p>Look at the <strong>green dot</strong> — do not click. Hold your gaze steady.</p>' +
-            '</div>' +
-            '<div class="val-target" style="left:' + px + 'px;top:' + py + 'px;"></div>' +
-          '</div>';
-        overlayEl.classList.add('visible');
+      overlayEl.innerHTML =
+        '<div class="cal-backdrop validation-mode">' +
+          '<div class="cal-instructions">' +
+            '<h2>Accuracy check ' + (index + 1) + ' / ' + testPoints.length + '</h2>' +
+            '<p>Look at the <strong>green dot</strong> (don\'t click).</p>' +
+            '<p id="valPhase" class="cal-tip">Move your eyes to the dot…</p>' +
+            '<p id="valLive" class="cal-tip" style="font-size:0.8rem"></p>' +
+          '</div>' +
+          '<div class="val-target" style="left:' + px + 'px;top:' + py + 'px;"></div>' +
+          '<div id="valGazeDot" class="val-gaze-dot"></div>' +
+        '</div>';
+      overlayEl.classList.add('visible');
 
+      var phaseEl = document.getElementById('valPhase');
+      var liveEl = document.getElementById('valLive');
+      var gazeDot = document.getElementById('valGazeDot');
+      resetSmoothing();
+
+      return waitMs(1200).then(function () {
+        if (phaseEl) phaseEl.textContent = 'Hold steady — measuring…';
         var samples = [];
         var start = Date.now();
-        var interval = global.setInterval(function () {
-          if (!hasWebGazer()) return;
-          var p = global.webgazer.getCurrentPrediction();
-          var b = boundGaze(p);
-          if (b) samples.push(b);
-          if (Date.now() - start > 1200) {
-            global.clearInterval(interval);
-            if (samples.length) {
-              var avgX = samples.reduce(function (a, s) { return a + s.x; }, 0) / samples.length;
-              var avgY = samples.reduce(function (a, s) { return a + s.y; }, 0) / samples.length;
-              var err = Math.sqrt(Math.pow(avgX - px, 2) + Math.pow(avgY - py, 2));
-              errors.push(err);
-            }
-            global.setTimeout(function () { resolve(sampleAtPoint(index + 1)); }, 300);
-          }
-        }, 50);
+        var SAMPLE_MS = 2000;
+
+        return new Promise(function (done) {
+          var interval = global.setInterval(function () {
+            readPrediction().then(function (b) {
+              if (!b) return;
+              if (gazeDot) {
+                gazeDot.style.display = 'block';
+                gazeDot.style.left = b.x + 'px';
+                gazeDot.style.top = b.y + 'px';
+              }
+              if (liveEl) liveEl.textContent = 'Tracker: ' + Math.round(b.x) + ', ' + Math.round(b.y);
+
+              var elapsed = Date.now() - start;
+              if (elapsed > 400) {
+                var s = smoothGaze(b);
+                if (s) samples.push(s);
+              }
+              if (elapsed > SAMPLE_MS) {
+                global.clearInterval(interval);
+                if (samples.length >= 2) {
+                  var avgX = samples.reduce(function (a, s) { return a + s.x; }, 0) / samples.length;
+                  var avgY = samples.reduce(function (a, s) { return a + s.y; }, 0) / samples.length;
+                  errors.push(Math.sqrt(Math.pow(avgX - px, 2) + Math.pow(avgY - py, 2)));
+                } else {
+                  errors.push(null);
+                }
+                done();
+              }
+            });
+          }, 50);
+        });
+      }).then(function () {
+        return waitMs(300).then(function () { return sampleAtPoint(index + 1); });
       });
     }
 
     return sampleAtPoint(0).then(function () {
       overlayEl.classList.remove('visible');
       overlayEl.innerHTML = '';
-      var avg = errors.length ? errors.reduce(function (a, e) { return a + e; }, 0) / errors.length : 999;
-      return { errors: errors, avgErrorPx: avg, passed: avg < 180 };
+      state.validating = false;
+      resetSmoothing();
+
+      var validErrors = errors.filter(function (e) { return e != null; });
+      var avg = validErrors.length
+        ? validErrors.reduce(function (a, e) { return a + e; }, 0) / validErrors.length
+        : null;
+      var pointsUnderThreshold = validErrors.filter(function (e) { return e < passThreshold; }).length;
+
+      return {
+        errors: errors,
+        avgErrorPx: avg,
+        passThresholdPx: passThreshold,
+        pointsMeasured: validErrors.length,
+        pointsUnderThreshold: pointsUnderThreshold,
+        passed: validErrors.length >= 2 && (avg < passThreshold || pointsUnderThreshold >= 2),
+        noTracking: validErrors.length === 0
+      };
     });
   }
 
@@ -327,10 +417,11 @@
     clearTrainingData: clearTrainingData,
     start: start,
     stop: stop,
-    pause: pause,
-    resume: resume,
     runCalibration: runCalibration,
     runValidation: runValidation,
+    warmupAfterCalibration: warmupAfterCalibration,
+    readPrediction: readPrediction,
+    getPassThresholdPx: getPassThresholdPx,
     boundGaze: boundGaze,
     smoothGaze: smoothGaze,
     resetSmoothing: resetSmoothing,

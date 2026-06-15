@@ -137,39 +137,70 @@
         progress.textContent = 'Only ' + result.pointsCompleted + '/9 points — recalibrate for better tracking.';
         return;
       }
-      progress.textContent = 'All 9 points done. Continue to accuracy check.';
+      progress.textContent = 'All 9 points done. You can start the exam or run an optional accuracy check.';
       $('btnAfterCal').disabled = false;
+      $('btnStartExam').disabled = false;
     });
   }
 
   function runValidationFlow() {
     var btn = $('btnRunValidation');
     var out = $('validationResult');
+    var continueBtn = $('btnContinueAnyway');
     btn.disabled = true;
-    out.textContent = 'Testing accuracy…';
+    if (continueBtn) continueBtn.disabled = true;
+    $('btnStartExam').disabled = true;
+    out.textContent = 'Warming up tracker (2 sec)… keep facing the camera.';
 
-    SideNoteGaze.runValidation(els.calOverlay).then(function (result) {
+    SideNoteGaze.warmupAfterCalibration(2000).then(function () {
+      out.textContent = 'Testing accuracy… look at each green dot.';
+      return SideNoteGaze.runValidation(els.calOverlay);
+    }).then(function (result) {
       btn.disabled = false;
       lastCalibration = {
         points_completed: 9,
         cancelled: false,
         avg_error_px: result.avgErrorPx,
+        pass_threshold_px: result.passThresholdPx,
         passed: result.passed
       };
       if (typeof SideNoteAPI !== 'undefined' && SideNoteAPI.isOnline()) {
         SideNoteAPI.saveCalibration(lastCalibration);
       }
-      var msg = 'Average error: ' + Math.round(result.avgErrorPx) + ' px. ';
-      if (result.passed) {
-        msg += 'Good enough — start the exam.';
-        $('btnStartExam').disabled = false;
-        out.className = 'validation-result pass';
-      } else {
-        msg += 'Accuracy is low — recalibrate in good lighting, keep your head still, and sit arm\'s length from the screen.';
+
+      var msg = '';
+      if (result.noTracking) {
+        msg = 'Tracker could not read your gaze during the check. You can still start the exam if calibration felt OK — or recalibrate with better lighting.';
         out.className = 'validation-result fail';
+        $('btnStartExam').disabled = false;
         $('btnRecalibrate').disabled = false;
+        if (continueBtn) continueBtn.disabled = false;
+      } else if (result.avgErrorPx == null) {
+        msg = 'Not enough samples — but you can start the exam if the orange dot moved near the green dots during the check.';
+        $('btnStartExam').disabled = false;
+        out.className = 'validation-result fail';
+        if (continueBtn) continueBtn.disabled = false;
+      } else {
+        msg = 'Average error: ' + Math.round(result.avgErrorPx) + ' px (target under ' + Math.round(result.passThresholdPx) + ' px). ';
+        msg += result.pointsUnderThreshold + '/' + result.pointsMeasured + ' points on target. ';
+        if (result.passed) {
+          msg += 'Looks good — start the exam.';
+          $('btnStartExam').disabled = false;
+          out.className = 'validation-result pass';
+        } else {
+          msg += 'Tracking is rough but usable — start the exam or recalibrate.';
+          out.className = 'validation-result fail';
+          $('btnStartExam').disabled = false;
+          $('btnRecalibrate').disabled = false;
+          if (continueBtn) continueBtn.disabled = false;
+        }
       }
       out.textContent = msg;
+    }).catch(function (err) {
+      btn.disabled = false;
+      out.textContent = 'Validation error: ' + (err.message || err);
+      out.className = 'validation-result fail';
+      if (continueBtn) continueBtn.disabled = false;
     });
   }
 
@@ -204,9 +235,10 @@
 
     if (window._faceCheckInterval) clearInterval(window._faceCheckInterval);
     window._faceCheckInterval = setInterval(function () {
-      if (typeof webgazer === 'undefined') return;
-      var p = webgazer.getCurrentPrediction();
-      if (!p || typeof p.x !== 'number') onGazeMissing();
+      if (typeof SideNoteGaze === 'undefined') return;
+      SideNoteGaze.readPrediction().then(function (p) {
+        if (!p || typeof p.x !== 'number') onGazeMissing();
+      });
     }, 200);
   }
 
@@ -278,11 +310,18 @@
     $('btnRecalibrate').addEventListener('click', function () {
       $('btnStartExam').disabled = true;
       $('btnRecalibrate').disabled = true;
+      if ($('btnContinueAnyway')) $('btnContinueAnyway').disabled = true;
       $('validationResult').textContent = '';
       $('validationResult').className = 'validation-result';
       showStep(STEPS.indexOf('calibrate'));
     });
     $('btnStartExam').addEventListener('click', nextStep);
+    if ($('btnContinueAnyway')) {
+      $('btnContinueAnyway').addEventListener('click', function () {
+        $('btnStartExam').disabled = false;
+        nextStep();
+      });
+    }
     $('btnFinishExam').addEventListener('click', finishExam);
     $('btnDownloadReport').addEventListener('click', downloadReport);
     $('btnRestart').addEventListener('click', function () {
@@ -294,6 +333,7 @@
       $('btnAfterCal').disabled = true;
       $('btnStartExam').disabled = true;
       $('btnRecalibrate').disabled = true;
+      if ($('btnContinueAnyway')) $('btnContinueAnyway').disabled = true;
       $('calProgress').textContent = '';
       $('validationResult').textContent = '';
       showStep(0);
