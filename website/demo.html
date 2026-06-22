@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Side Note — Proctoring Demo</title>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Lora:wght@500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/demo.css">
   <script>
     window.saveDataAcrossSessions = false;
@@ -34,7 +34,7 @@
     <header class="top-bar">
       <h1>
         <img src="logo.svg" alt="" width="28" height="28">
-        Side Note — Exam Proctoring
+        Side Note
       </h1>
       <nav class="step-track" aria-label="Setup progress">
         <span class="step-dot active" data-step-indicator title="Welcome"></span>
@@ -48,28 +48,28 @@
     </header>
 
     <section class="panel" data-step-panel>
-      <h2>Welcome</h2>
-      <div id="libraryStatus" class="lib-status">Loading WebGazer…</div>
-      <div id="apiStatus" class="lib-status">Checking backend…</div>
-      <p>This demo runs <strong>real webcam eye tracking</strong> in your browser. Accuracy depends on lighting, camera placement, and calibration — follow every step for best results.</p>
-      <p><strong>Best browsers:</strong> Chrome or Edge on a laptop with a built-in webcam.</p>
+      <h2>Hi there — let's get set up</h2>
+      <div id="libraryStatus" class="lib-status">Getting your camera ready…</div>
+      <div id="apiStatus" class="lib-status">Checking connection…</div>
+      <p>This is a practice exam that uses your webcam to follow where you're looking. It works best with good lighting and a quick calibration — nothing fancy, just a few clicks.</p>
+      <p>Chrome or Edge on a laptop with a built-in camera is your best bet.</p>
       <div class="setup-link">
         First time? Read the setup guide: <a href="SETUP.md" target="_blank">SETUP.md</a>
       </div>
       <div class="btn-row">
-        <button type="button" class="btn btn-primary" id="btnStartCamera">Allow camera &amp; continue →</button>
+        <button type="button" class="btn btn-primary" id="btnStartCamera">Turn on camera &amp; continue →</button>
       </div>
     </section>
 
     <section class="panel" data-step-panel hidden>
-      <h2>Before you calibrate</h2>
-      <p>WebGazer maps your eye features to screen coordinates. These conditions matter more than any software tweak:</p>
+      <h2>A few things before we start</h2>
+      <p>Eye tracking works a lot better when the setup is right. Take a quick look at this list:</p>
       <ul class="checklist">
-        <li><strong>Lighting</strong>Face lit evenly from the front. Avoid backlighting (window behind you).</li>
-        <li><strong>Distance</strong>Sit arm's length from the screen (~50–70 cm). Keep that distance during the exam.</li>
-        <li><strong>Head still</strong>Move your eyes, not your head, when looking around the screen.</li>
-        <li><strong>Camera</strong>Webcam at eye level. Glasses are OK; sunglasses are not.</li>
-        <li><strong>Full screen</strong>Maximize this window. Calibration is tied to your screen size.</li>
+        <li><strong>Lighting</strong> Your face should be lit from the front. Try to avoid sitting with a bright window behind you.</li>
+        <li><strong>Distance</strong> Sit about an arm's length from the screen (~50–70 cm) and try to keep that distance.</li>
+        <li><strong>Head still</strong> Move your eyes to look around — try not to move your whole head.</li>
+        <li><strong>Camera</strong> Webcam at eye level works best. Glasses are fine; sunglasses won't work.</li>
+        <li><strong>Full screen</strong> Maximize this window — calibration is tied to your screen size.</li>
       </ul>
       <div class="btn-row">
         <button type="button" class="btn btn-secondary" id="btnBackChecklist">← Back</button>
@@ -78,9 +78,9 @@
     </section>
 
     <section class="panel" data-step-panel hidden>
-      <h2>9-point calibration</h2>
-      <p>For each point: <strong>look at the green circle</strong>, then <strong>click it</strong>. WebGazer learns where your eyes point on <em>this</em> screen.</p>
-      <p>A small camera preview appears bottom-left — your face should stay in frame the whole time.</p>
+      <h2>Quick calibration</h2>
+      <p>For each dot: <strong>look at the circle</strong>, then <strong>click it</strong>. That's how we learn where your eyes point on this screen.</p>
+      <p>A small camera preview shows up in the bottom-left — keep your face in frame the whole time.</p>
       <div class="btn-row">
         <button type="button" class="btn btn-primary" id="btnRunCalibration">Start 9-point calibration</button>
       </div>
@@ -91,8 +91,8 @@
     </section>
 
     <section class="panel" data-step-panel hidden>
-      <h2>Accuracy check (optional)</h2>
-      <p>Optional — you can <strong>skip straight to the exam</strong> after calibration. This step shows an orange dot so you can see if tracking works.</p>
+      <h2>Accuracy check <span style="font-weight:400;color:var(--muted);font-size:0.9em">(optional)</span></h2>
+      <p>You can skip this and go straight to the exam. This step shows a warm-colored dot following your gaze so you can see if tracking feels right.</p>
       <div class="btn-row">
         <button type="button" class="btn btn-primary" id="btnRunValidation">Run accuracy check</button>
         <button type="button" class="btn btn-secondary" id="btnRecalibrate" disabled>← Recalibrate</button>
@@ -125,15 +125,15 @@
           </p>
         </div>
         <aside class="proctor-panel">
-          <h4>Integrity monitor</h4>
+          <h4>What we're watching</h4>
           <div class="exam-meta">Time: <span id="examTimer">00:00</span></div>
-          <div class="status-badge" id="statusBadge" style="background:#00d4aa">OK</div>
-          <ul id="statusMessages"><li class="ok-msg">Eyes on exam content</li></ul>
+          <div class="status-badge" id="statusBadge" style="background:#7a9e6a">OK</div>
+          <ul id="statusMessages"><li class="ok-msg">Looking good — eyes on the exam</li></ul>
           <h4>Live log</h4>
           <ul id="eventLog"></ul>
           <label class="toggle-row">
             <input type="checkbox" id="toggleGazeDot" checked>
-            Show gaze dot (debug)
+            Show where I'm looking
           </label>
           <div class="zone-legend">
             <p><span class="zone-warn"></span> Bottom zone = lap/desk</p>

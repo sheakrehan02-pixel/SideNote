@@ -6,10 +6,15 @@
 
   var sessionId = null;
   var backendOnline = false;
+  var healthTimer = null;
 
   function baseUrl() {
     if (global.SIDE_NOTE_API_URL) return global.SIDE_NOTE_API_URL.replace(/\/$/, '');
     return '';
+  }
+
+  function markOnline() {
+    backendOnline = true;
   }
 
   function request(path, options) {
@@ -27,6 +32,7 @@
           throw err;
         });
       }
+      markOnline();
       if (res.status === 204) return null;
       return res.json();
     });
@@ -44,6 +50,24 @@
       });
   }
 
+  function startHealthMonitor(onChange) {
+    if (healthTimer) return;
+    function poll() {
+      checkHealth().then(function (online) {
+        if (typeof onChange === 'function') onChange(online);
+      });
+    }
+    poll();
+    healthTimer = global.setInterval(poll, 5000);
+  }
+
+  function stopHealthMonitor() {
+    if (healthTimer) {
+      global.clearInterval(healthTimer);
+      healthTimer = null;
+    }
+  }
+
   function createSession(studentName) {
     return request('/api/sessions', {
       method: 'POST',
@@ -58,7 +82,7 @@
   }
 
   function saveCalibration(calibration) {
-    if (!sessionId || !backendOnline) return Promise.resolve(null);
+    if (!sessionId) return Promise.resolve(null);
     return request('/api/sessions/' + sessionId + '/calibration', {
       method: 'POST',
       body: calibration
@@ -69,7 +93,7 @@
   }
 
   function recordEvent(status, messages) {
-    if (!sessionId || !backendOnline || status === 'ok') return Promise.resolve(null);
+    if (!sessionId || status === 'ok') return Promise.resolve(null);
     return request('/api/sessions/' + sessionId + '/events', {
       method: 'POST',
       body: { status: status, messages: messages || [] }
@@ -80,7 +104,7 @@
   }
 
   function submitReport(report) {
-    if (!sessionId || !backendOnline) return Promise.resolve(null);
+    if (!sessionId) return Promise.resolve(null);
     var payload = {
       integrity_score: report.integrityScore,
       suspicious_count: report.suspiciousCount,
@@ -105,6 +129,8 @@
 
   global.SideNoteAPI = {
     checkHealth: checkHealth,
+    startHealthMonitor: startHealthMonitor,
+    stopHealthMonitor: stopHealthMonitor,
     createSession: createSession,
     saveCalibration: saveCalibration,
     recordEvent: recordEvent,

@@ -107,7 +107,7 @@
       el.style.setProperty('width', '160px', 'important');
       el.style.setProperty('height', 'auto', 'important');
       el.style.setProperty('border-radius', '8px', 'important');
-      el.style.setProperty('border', '2px solid rgba(0,212,170,0.4)', 'important');
+      el.style.setProperty('border', '2px solid rgba(196,120,74,0.4)', 'important');
       el.style.setProperty('z-index', '9990', 'important');
       el.style.setProperty('opacity', '0.85', 'important');
     });
@@ -186,9 +186,8 @@
       function loop() {
         if (!state.active) return;
         readPrediction().then(function (b) {
-          if (!b || state.calibrating || !state.listener) return;
-          var s = smoothGaze(b);
-          if (s) state.listener(s);
+          if (!b || state.calibrating) return;
+          state.latestGaze = b;
         });
         state.rafId = global.requestAnimationFrame(loop);
       }
@@ -351,35 +350,44 @@
         var samples = [];
         var start = Date.now();
         var SAMPLE_MS = 2000;
+        var noGazeCount = 0;
 
         return new Promise(function (done) {
           var interval = global.setInterval(function () {
-            readPrediction().then(function (b) {
-              if (!b) return;
-              if (gazeDot) {
-                gazeDot.style.display = 'block';
-                gazeDot.style.left = b.x + 'px';
-                gazeDot.style.top = b.y + 'px';
-              }
-              if (liveEl) liveEl.textContent = 'Tracker: ' + Math.round(b.x) + ', ' + Math.round(b.y);
+            var elapsed = Date.now() - start;
 
-              var elapsed = Date.now() - start;
-              if (elapsed > 400) {
-                var s = smoothGaze(b);
-                if (s) samples.push(s);
-              }
-              if (elapsed > SAMPLE_MS) {
-                global.clearInterval(interval);
-                if (samples.length >= 2) {
-                  var avgX = samples.reduce(function (a, s) { return a + s.x; }, 0) / samples.length;
-                  var avgY = samples.reduce(function (a, s) { return a + s.y; }, 0) / samples.length;
-                  errors.push(Math.sqrt(Math.pow(avgX - px, 2) + Math.pow(avgY - py, 2)));
-                } else {
-                  errors.push(null);
+            readPrediction().then(function (b) {
+              if (b) {
+                noGazeCount = 0;
+                if (gazeDot) {
+                  gazeDot.style.display = 'block';
+                  gazeDot.style.left = b.x + 'px';
+                  gazeDot.style.top = b.y + 'px';
                 }
-                done();
+                if (liveEl) liveEl.textContent = 'Tracker: ' + Math.round(b.x) + ', ' + Math.round(b.y);
+                if (elapsed > 400) {
+                  var s = smoothGaze(b);
+                  if (s) samples.push(s);
+                }
+              } else {
+                noGazeCount += 1;
+                if (liveEl && noGazeCount > 5) {
+                  liveEl.textContent = 'No gaze yet — face the camera with good lighting';
+                }
               }
             });
+
+            if (elapsed > SAMPLE_MS) {
+              global.clearInterval(interval);
+              if (samples.length >= 2) {
+                var avgX = samples.reduce(function (a, s) { return a + s.x; }, 0) / samples.length;
+                var avgY = samples.reduce(function (a, s) { return a + s.y; }, 0) / samples.length;
+                errors.push(Math.sqrt(Math.pow(avgX - px, 2) + Math.pow(avgY - py, 2)));
+              } else {
+                errors.push(null);
+              }
+              done();
+            }
           }, 50);
         });
       }).then(function () {

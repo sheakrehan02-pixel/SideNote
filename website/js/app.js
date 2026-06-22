@@ -11,6 +11,7 @@
   var lastStatus = 'ok';
   var showGazeDot = true;
   var faceMissCount = 0;
+  var lastGazeTime = 0;
   var lastCalibration = null;
   var serverSessionId = null;
 
@@ -55,7 +56,7 @@
     els.statusBadge.style.background = result.color;
     els.statusMessages.innerHTML = result.messages.length
       ? result.messages.map(function (m) { return '<li>' + m + '</li>'; }).join('')
-      : '<li class="ok-msg">Eyes on exam content</li>';
+      : '<li class="ok-msg">Looking good — eyes on the exam</li>';
 
     if (result.status !== lastStatus) {
       if (detector) detector.logEvent(result.status, result.messages);
@@ -78,21 +79,24 @@
   function onGaze(sample) {
     if (!sample || currentStep !== STEPS.indexOf('exam')) return;
 
+    lastGazeTime = Date.now();
+    faceMissCount = 0;
+
     if (showGazeDot && els.gazeDot) {
       els.gazeDot.style.display = 'block';
       els.gazeDot.style.left = sample.x + 'px';
       els.gazeDot.style.top = sample.y + 'px';
     }
 
-    faceMissCount = 0;
     var result = detector.update(sample, true);
     setProctorStatus(result);
   }
 
   function onGazeMissing() {
     if (currentStep !== STEPS.indexOf('exam')) return;
+    if (Date.now() - lastGazeTime < 600) return;
     faceMissCount += 1;
-    if (faceMissCount > 8) {
+    if (faceMissCount > 12) {
       var result = detector.update(null, false);
       setProctorStatus(result);
     }
@@ -209,9 +213,10 @@
     lastStatus = 'ok';
     examStartTime = Date.now();
     faceMissCount = 0;
+    lastGazeTime = Date.now();
     serverSessionId = null;
     if (els.eventLog) els.eventLog.innerHTML = '';
-    setProctorStatus({ status: 'ok', messages: [], color: '#00d4aa' });
+    setProctorStatus({ status: 'ok', messages: [], color: '#7a9e6a' });
 
     if (typeof SideNoteAPI !== 'undefined') {
       SideNoteAPI.createSession(null).then(function (session) {
@@ -279,8 +284,8 @@
         '<p><strong>Integrity score:</strong> ' + report.integrityScore + '/100</p>' +
         '<p><strong>Warnings:</strong> ' + report.warningCount + ' · <strong>Flags:</strong> ' + report.suspiciousCount + '</p>' +
         (typeof SideNoteAPI !== 'undefined' && SideNoteAPI.isOnline()
-          ? '<p class="ok-msg" style="color:var(--accent,#00d4aa)">Report saved to backend.</p>'
-          : '<p style="color:#8b949e">Offline mode — download JSON to keep a copy.</p>');
+          ? '<p class="ok-msg" style="color:var(--ok)">Report saved — you\'re all set.</p>'
+          : '<p style="color:var(--muted)">Session saved locally — download the JSON to keep a copy.</p>');
     }
     if (els.reportEvents) {
       els.reportEvents.innerHTML = report.events.length
@@ -349,8 +354,19 @@
     var apiEl = $('apiStatus');
 
     function showWebGazer(src) {
-      el.textContent = 'WebGazer ready (' + src + '). Use Chrome or Edge for best results.';
+      el.textContent = 'Camera tracking is ready (' + src + '). Chrome or Edge works best.';
       el.className = 'lib-status ok';
+    }
+
+    function showBackendStatus(online) {
+      if (!apiEl) return;
+      if (online) {
+        apiEl.textContent = 'Connected — your session will be saved automatically.';
+        apiEl.className = 'lib-status ok';
+      } else {
+        apiEl.textContent = 'Not connected yet — start the server with: python run_server.py';
+        apiEl.className = 'lib-status warn';
+      }
     }
 
     SideNoteGaze.waitForWebGazer().then(function () {
@@ -361,15 +377,7 @@
     });
 
     if (typeof SideNoteAPI !== 'undefined' && apiEl) {
-      SideNoteAPI.checkHealth().then(function (online) {
-        if (online) {
-          apiEl.textContent = 'Backend connected — sessions will be saved automatically.';
-          apiEl.className = 'lib-status ok';
-        } else {
-          apiEl.textContent = 'Backend offline — run: python run_server.py (demo still works locally).';
-          apiEl.className = 'lib-status err';
-        }
-      });
+      SideNoteAPI.startHealthMonitor(showBackendStatus);
     }
   }
 
