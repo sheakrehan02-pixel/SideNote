@@ -375,6 +375,15 @@ a:hover { text-decoration: underline; color: var(--accent); }
 .cal-instructions p { color: rgba(245, 239, 230, 0.75); }
 .cal-tip { font-size: 0.85rem; margin-top: 8px; color: var(--accent) !important; }
 
+.cal-target-static {
+  position: fixed;
+  width: 56px;
+  height: 56px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 10002;
+}
+
 .cal-target {
   position: fixed;
   width: 56px;

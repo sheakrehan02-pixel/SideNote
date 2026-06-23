@@ -6,373 +6,105 @@
   <title>Side Note — Eye Tracking for Everyone</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --bg: #0a0e17;
-      --surface: #131920;
-      --border: #1e2733;
-      --text: #e6edf3;
-      --muted: #8b949e;
-      --accent: #00d4aa;
-      --accent-dim: #00a884;
-      --warning: #ffb020;
-    }
-
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    body {
-      font-family: 'DM Sans', system-ui, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      line-height: 1.6;
-      min-height: 100vh;
-    }
-
-    /* Layout */
-    .container {
-      max-width: 900px;
-      margin: 0 auto;
-      padding: 0 24px;
-    }
-
-    /* Hero */
-    .hero {
-      padding: 80px 0 60px;
-      text-align: center;
-    }
-
-    .hero .logo {
-      margin-bottom: 16px;
-      display: block;
-    }
-
-    .hero h1 {
-      font-size: clamp(2.5rem, 6vw, 3.5rem);
-      font-weight: 700;
-      letter-spacing: -0.02em;
-      margin-bottom: 12px;
-      background: linear-gradient(135deg, #fff 0%, var(--accent) 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-
-    .hero .tagline {
-      font-size: 1.2rem;
-      color: var(--muted);
-      margin-bottom: 32px;
-    }
-
-    .hero .badge {
-      display: inline-block;
-      padding: 6px 14px;
-      background: rgba(0, 212, 170, 0.15);
-      border: 1px solid var(--accent-dim);
-      border-radius: 100px;
-      font-size: 0.85rem;
-      color: var(--accent);
-      font-family: 'JetBrains Mono', monospace;
-    }
-
-    /* Sections */
-    section {
-      padding: 48px 0;
-      border-top: 1px solid var(--border);
-    }
-
-    section h2 {
-      font-size: 1.5rem;
-      font-weight: 600;
-      margin-bottom: 16px;
-      color: var(--text);
-    }
-
-    section p {
-      color: var(--muted);
-      margin-bottom: 12px;
-    }
-
-    /* Prototype */
-    .prototype {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      overflow: hidden;
-      margin-top: 24px;
-    }
-
-    .prototype-header {
-      padding: 20px 24px;
-      background: rgba(0,0,0,0.2);
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 12px;
-    }
-
-    .prototype-header h3 {
-      font-size: 1.1rem;
-      font-weight: 600;
-    }
-
-    .prototype-actions {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    .btn {
-      padding: 10px 20px;
-      border-radius: 8px;
-      font-size: 0.9rem;
-      font-weight: 500;
-      cursor: pointer;
-      border: none;
-      font-family: inherit;
-      transition: all 0.2s;
-    }
-
-    .btn-primary {
-      background: var(--accent);
-      color: var(--bg);
-    }
-
-    .btn-primary:hover {
-      background: var(--accent-dim);
-    }
-
-    .btn-secondary {
-      background: transparent;
-      border: 1px solid var(--border);
-      color: var(--text);
-    }
-
-    .btn-secondary:hover {
-      border-color: var(--muted);
-      background: rgba(255,255,255,0.05);
-    }
-
-    .prototype-frame {
-      position: relative;
-      min-height: 400px;
-      background: #0d1117;
-    }
-
-    #gazeDemo {
-      width: 100%;
-      min-height: 400px;
-      display: block;
-    }
-
-    .gaze-indicator {
-      position: absolute;
-      width: 24px;
-      height: 24px;
-      border-radius: 50%;
-      background: var(--accent);
-      border: 3px solid rgba(0,212,170,0.5);
-      pointer-events: none;
-      transform: translate(-50%, -50%);
-      display: none;
-      transition: left 0.05s, top 0.05s;
-    }
-
-    .prototype-status {
-      padding: 12px 24px;
-      font-size: 0.9rem;
-      color: var(--muted);
-      font-family: 'JetBrains Mono', monospace;
-      border-top: 1px solid var(--border);
-    }
-
-    .prototype-status.active {
-      color: var(--accent);
-    }
-
-    /* Feature list */
-    .features {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 20px;
-      margin-top: 24px;
-    }
-
-    .feature {
-      padding: 20px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-    }
-
-    .feature h4 {
-      font-size: 1rem;
-      margin-bottom: 8px;
-      color: var(--accent);
-    }
-
-    .feature p {
-      font-size: 0.9rem;
-      margin: 0;
-    }
-
-    /* Tech stack */
-    .tech-list {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin-top: 16px;
-    }
-
-    .tech-tag {
-      padding: 8px 14px;
-      background: rgba(0,212,170,0.1);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.85rem;
-      color: var(--accent);
-    }
-
-    /* CTA */
-    .cta {
-      text-align: center;
-      padding: 60px 0;
-    }
-
-    .cta h2 {
-      margin-bottom: 12px;
-    }
-
-    .cta p {
-      margin-bottom: 24px;
-    }
-
-    .cta .btn {
-      display: inline-block;
-      text-decoration: none;
-      margin: 0 8px 8px 0;
-    }
-
-    .cta code {
-      background: var(--surface);
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.9em;
-    }
-
-    /* Footer */
-    footer {
-      padding: 24px 0;
-      border-top: 1px solid var(--border);
-      text-align: center;
-      color: var(--muted);
-      font-size: 0.9rem;
-    }
-  </style>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Lora:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/demo.css">
+  <link rel="stylesheet" href="css/home.css">
 </head>
 <body>
-  <div class="container">
+  <div class="home-shell">
     <header class="hero">
       <img src="logo.svg" alt="Side Note" class="logo" width="64" height="64">
       <h1>Side Note</h1>
-      <p class="tagline">Reduce cheating in online exams — detect when students look at phones or notes</p>
-      <span class="badge">Python + Web prototype</span>
+      <p class="tagline">A simple way to notice when someone's eyes wander during an online exam — using the webcam they already have.</p>
+      <span class="badge">Works in the browser · No extra hardware</span>
     </header>
 
-    <section>
-      <h2>Our goal</h2>
-      <p>Online exams make it easy to cheat: students glance at their phone, peek at notes, or use a second device. Proctors can't see everything. Side Note uses eye tracking to detect when attention leaves the screen — flagging suspicious glances toward phones, papers, or other devices.</p>
-      <p>No expensive hardware. No new cameras. Just the webcam students already have.</p>
+    <section class="home-section">
+      <h2>Why we built this</h2>
+      <p>During online exams, it's hard to tell if someone is glancing at their phone, notes on their desk, or a second screen. Proctors can't watch every student closely.</p>
+      <p>Side Note uses eye tracking to gently flag when attention drifts away from the screen — no special equipment, just a regular webcam.</p>
     </section>
 
-    <section>
-      <h2>What is Side Note?</h2>
-      <p>Side Note is a real-time eye tracking application that works with your existing webcam. It tracks gaze direction and iris position to understand where someone is looking — on-screen or off.</p>
+    <section class="home-section">
+      <h2>What it does</h2>
+      <p>Side Note follows where someone is looking — on the exam content, toward the bottom of the screen, or off to the sides — and logs brief warnings when it looks suspicious.</p>
 
       <div class="features">
         <div class="feature">
           <h4>Real-time tracking</h4>
-          <p>MediaPipe Face Mesh powers accurate iris and gaze detection at 30+ fps</p>
+          <p>Follows gaze as the student works through questions, with a live status panel during the exam.</p>
         </div>
         <div class="feature">
-          <h4>Zero hardware cost</h4>
-          <p>Works with any webcam — no Tobii or EyeLink required</p>
+          <h4>No extra gear</h4>
+          <p>Runs on any laptop with a built-in webcam. Nothing to install or ship to students.</p>
         </div>
         <div class="feature">
-          <h4>Python & Web</h4>
-          <p>Desktop app (Python) and browser prototype (WebGazer.js) for flexibility</p>
+          <h4>Browser or desktop</h4>
+          <p>Try the web demo in Chrome, or run the full Python app locally for deeper testing.</p>
         </div>
       </div>
     </section>
 
-    <section>
-      <h2>Try the prototype</h2>
-      <p>Use the guided web demo: camera setup → 9-point calibration → accuracy check → practice exam with live integrity monitoring.</p>
+    <section class="home-section">
+      <h2>Try it yourself</h2>
+      <p>Walk through a short setup — camera, calibration, optional accuracy check — then take a sample biology exam and see the monitor in action.</p>
 
-      <div class="prototype">
+      <div class="prototype-card">
         <div class="prototype-header">
-          <h3>Browser-based gaze tracking</h3>
-          <a href="demo.html" target="_blank" class="btn btn-primary">Open prototype →</a>
+          <h3>Browser demo</h3>
+          <a href="demo.html" class="btn btn-primary">Open demo →</a>
         </div>
-        <div class="prototype-frame" style="min-height: 200px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 16px;">
-          <p style="color: var(--muted); margin: 0;">Click the button above to try eye tracking in a new tab.</p>
-          <a href="demo.html" target="_blank" class="btn btn-secondary">Try it now</a>
+        <div class="prototype-body">
+          <p style="color: var(--muted); margin: 0; text-align: center;">Takes about 5 minutes. Best in Chrome or Edge with good lighting.</p>
+          <a href="demo.html" class="btn btn-secondary">Start the demo</a>
         </div>
       </div>
     </section>
 
-    <section>
-      <h2>Online courses & classes</h2>
-      <p>Side Note fits into the workflows schools and platforms already use:</p>
-      <ul style="color: var(--muted); margin: 12px 0 0 20px;">
-        <li style="margin-bottom: 8px;"><strong style="color: var(--text);">LMS integration</strong> — Embed the web prototype into Canvas, Moodle, or any exam platform. Students take tests in the browser; gaze data is captured in real time.</li>
-        <li style="margin-bottom: 8px;"><strong style="color: var(--text);">Proctoring add-on</strong> — Works alongside existing proctoring tools. When gaze leaves the screen for more than a few seconds, flag it for review.</li>
-        <li style="margin-bottom: 8px;"><strong style="color: var(--text);">Live classes</strong> — Monitor engagement during video lectures. See when attention drops or students look away.</li>
+    <section class="home-section">
+      <h2>For schools &amp; courses</h2>
+      <p>Side Note fits into workflows you may already use:</p>
+      <ul>
+        <li><strong>LMS integration</strong> — Embed the web demo into Canvas, Moodle, or any exam page. Gaze data is captured as students work.</li>
+        <li><strong>Proctoring add-on</strong> — Layer on top of existing tools. Flags sustained glances away from the screen for review.</li>
+        <li><strong>Live classes</strong> — See when attention drops during a video lecture or remote session.</li>
       </ul>
     </section>
 
-    <section>
-      <h2>Why it scales</h2>
-      <p><strong>No extra hardware.</strong> Every student has a laptop with a webcam. No need for Tobii trackers or specialized equipment.</p>
-      <p><strong>Browser-based.</strong> Deploy via a link. No installs, no IT headaches. Works on any device with a camera.</p>
-      <p><strong>From one class to millions.</strong> The same system handles a single classroom or a global MOOC. Add more users without adding more hardware.</p>
+    <section class="home-section">
+      <h2>Built to scale</h2>
+      <p><strong>No extra hardware.</strong> Every student has a laptop with a webcam.</p>
+      <p><strong>Browser-first.</strong> Share a link — no installs, no IT tickets.</p>
+      <p><strong>One class or thousands.</strong> The same setup works for a single room or a global course.</p>
     </section>
 
-    <section>
+    <section class="home-section">
       <h2>How it works</h2>
-      <p><strong>Desktop (Python):</strong> Uses OpenCV + MediaPipe Face Mesh to detect 468 facial landmarks. Iris and eye centers are used to compute gaze direction. A green box confirms when eyes are tracked.</p>
-      <p><strong>Web prototype:</strong> WebGazer.js runs in the browser. Calibrate once, then gaze coordinates are mapped to the screen for testing without installation.</p>
+      <p><strong>Web demo:</strong> WebGazer.js runs in the browser. After a quick 9-point calibration, it maps eye movement to screen coordinates and flags off-screen glances.</p>
+      <p><strong>Desktop app:</strong> OpenCV and MediaPipe track iris position and hand placement locally for deeper analysis — run with <code style="background:var(--surface-soft);padding:2px 8px;border-radius:6px;border:1px solid var(--border)">python main.py</code>.</p>
     </section>
 
-    <section>
-      <h2>Tech stack</h2>
+    <section class="home-section">
+      <h2>Built with</h2>
       <div class="tech-list">
         <span class="tech-tag">Python</span>
         <span class="tech-tag">OpenCV</span>
         <span class="tech-tag">MediaPipe</span>
         <span class="tech-tag">WebGazer.js</span>
-        <span class="tech-tag">NumPy</span>
+        <span class="tech-tag">FastAPI</span>
       </div>
     </section>
 
-    <section class="cta">
+    <section class="home-section cta">
       <h2>Get started</h2>
-      <p>Clone the repo and run <code>python main.py</code> for the full desktop experience.</p>
-      <a href="demo.html" target="_blank" class="btn btn-primary">Try web prototype</a>
-      <a href="sessions.html" target="_blank" class="btn btn-secondary">View sessions</a>
-      <a href="https://github.com/sheakrehan02-pixel/SideNote" class="btn btn-secondary">View on GitHub</a>
+      <p>Run the backend with <code>python run_server.py</code>, then open the demo at <code>localhost:8000/demo.html</code>.</p>
+      <a href="demo.html" class="btn btn-primary">Try the demo</a>
+      <a href="sessions.html" class="btn btn-secondary">View sessions</a>
+      <a href="https://github.com/sheakrehan02-pixel/SideNote" class="btn btn-secondary">GitHub</a>
     </section>
 
-    <footer>
-      Side Note — Reduce cheating in online exams with eye tracking. Scalable. No extra hardware.
+    <footer class="home-footer">
+      Side Note — eye tracking for online exams, using the webcam you already have.
     </footer>
   </div>
 </body>

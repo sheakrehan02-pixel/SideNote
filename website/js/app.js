@@ -10,10 +10,9 @@
   var examStartTime = null;
   var lastStatus = 'ok';
   var showGazeDot = true;
-  var faceMissCount = 0;
-  var lastGazeTime = 0;
   var lastCalibration = null;
   var serverSessionId = null;
+  var faceMissStreak = 0;
 
   var els = {};
 
@@ -79,8 +78,7 @@
   function onGaze(sample) {
     if (!sample || currentStep !== STEPS.indexOf('exam')) return;
 
-    lastGazeTime = Date.now();
-    faceMissCount = 0;
+    faceMissStreak = 0;
 
     if (showGazeDot && els.gazeDot) {
       els.gazeDot.style.display = 'block';
@@ -92,13 +90,18 @@
     setProctorStatus(result);
   }
 
-  function onGazeMissing() {
-    if (currentStep !== STEPS.indexOf('exam')) return;
-    if (Date.now() - lastGazeTime < 600) return;
-    faceMissCount += 1;
-    if (faceMissCount > 12) {
-      var result = detector.update(null, false);
-      setProctorStatus(result);
+  function tickExamMonitor() {
+    if (currentStep !== STEPS.indexOf('exam') || !detector) return;
+    if (typeof SideNoteGaze === 'undefined') return;
+
+    if (SideNoteGaze.isFaceVisible(900)) {
+      faceMissStreak = 0;
+      return;
+    }
+
+    faceMissStreak += 1;
+    if (faceMissStreak > 15) {
+      setProctorStatus(detector.update(null, false));
     }
   }
 
@@ -129,19 +132,26 @@
     btn.disabled = true;
     progress.textContent = 'Starting…';
 
-    SideNoteGaze.runCalibration(els.calOverlay, function (done, total) {
-      progress.textContent = done + ' / ' + total + ' points completed';
+    SideNoteGaze.runCalibration(els.calOverlay, function (done, total, samples, needed) {
+      if (samples != null) {
+        progress.textContent = 'Point ' + done + '/' + total + ' — samples ' + samples + '/' + needed;
+      } else {
+        progress.textContent = done + ' / ' + total + ' points completed';
+      }
     }).then(function (result) {
       btn.disabled = false;
       if (result.cancelled) {
-        progress.textContent = 'Calibration cancelled — try again for best accuracy.';
+        progress.textContent = 'Calibration cancelled — try again.';
         return;
       }
       if (result.pointsCompleted < 9) {
-        progress.textContent = 'Only ' + result.pointsCompleted + '/9 points — recalibrate for better tracking.';
+        progress.textContent = 'Only ' + result.pointsCompleted + '/9 points — try again.';
         return;
       }
-      progress.textContent = 'All 9 points done. You can start the exam or run an optional accuracy check.';
+      var sampleNote = result.totalSamples
+        ? ' (' + result.totalSamples + ' training samples collected)'
+        : '';
+      progress.textContent = 'All 9 points done' + sampleNote + '. Continue to the accuracy check or start the exam.';
       $('btnAfterCal').disabled = false;
       $('btnStartExam').disabled = false;
     });
@@ -154,9 +164,9 @@
     btn.disabled = true;
     if (continueBtn) continueBtn.disabled = true;
     $('btnStartExam').disabled = true;
-    out.textContent = 'Warming up tracker (2 sec)… keep facing the camera.';
+    out.textContent = 'Warming up tracker (4 sec)… keep facing the camera.';
 
-    SideNoteGaze.warmupAfterCalibration(2000).then(function () {
+    SideNoteGaze.warmupAfterCalibration(4000).then(function () {
       out.textContent = 'Testing accuracy… look at each green dot.';
       return SideNoteGaze.runValidation(els.calOverlay);
     }).then(function (result) {
@@ -166,7 +176,8 @@
         cancelled: false,
         avg_error_px: result.avgErrorPx,
         pass_threshold_px: result.passThresholdPx,
-        passed: result.passed
+        passed: result.passed,
+        training_samples: SideNoteGaze.getTrainingPointCount ? SideNoteGaze.getTrainingPointCount() : null
       };
       if (typeof SideNoteAPI !== 'undefined' && SideNoteAPI.isOnline()) {
         SideNoteAPI.saveCalibration(lastCalibration);
@@ -212,8 +223,7 @@
     detector = new SideNoteCheatingDetector();
     lastStatus = 'ok';
     examStartTime = Date.now();
-    faceMissCount = 0;
-    lastGazeTime = Date.now();
+    faceMissStreak = 0;
     serverSessionId = null;
     if (els.eventLog) els.eventLog.innerHTML = '';
     setProctorStatus({ status: 'ok', messages: [], color: '#7a9e6a' });
@@ -239,12 +249,7 @@
     }, 1000);
 
     if (window._faceCheckInterval) clearInterval(window._faceCheckInterval);
-    window._faceCheckInterval = setInterval(function () {
-      if (typeof SideNoteGaze === 'undefined') return;
-      SideNoteGaze.readPrediction().then(function (p) {
-        if (!p || typeof p.x !== 'number') onGazeMissing();
-      });
-    }, 200);
+    window._faceCheckInterval = setInterval(tickExamMonitor, 250);
   }
 
   function finishExam() {

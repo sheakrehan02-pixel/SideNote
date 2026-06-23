@@ -1,15 +1,21 @@
 /**
- * Side Note — Browser proctoring rules (screen-coordinate gaze zones).
+ * Side Note — Browser proctoring rules (normalized screen zones).
+ *
+ * Uses gaze (x, y) as fraction of viewport — NOT elementFromPoint, which
+ * breaks when gaze coordinates are noisy. Zones have hysteresis so brief
+ * noise doesn't flip warnings on/off.
  */
 (function (global) {
   'use strict';
 
-  var LAP_ZONE_Y = 0.78;
-  var OFF_SCREEN_X = 0.04;
-  var SUSPICIOUS_FRAMES = 15;
-  var WARNING_FRAMES = 8;
-  var HISTORY_LEN = 30;
-  var CLEAN_FRAMES_TO_RESET = 5;
+  var LAP_ENTER_Y = 0.82;
+  var LAP_EXIT_Y = 0.74;
+  var OFF_ENTER_X = 0.03;
+  var OFF_EXIT_X = 0.06;
+  var SUSPICIOUS_FRAMES = 20;
+  var WARNING_FRAMES = 10;
+  var HISTORY_LEN = 40;
+  var CLEAN_FRAMES_TO_RESET = 8;
 
   var STATUS_COLORS = {
     ok: '#7a9e6a',
@@ -17,23 +23,12 @@
     suspicious: '#c46a6a'
   };
 
-  var IGNORE_SELECTORS = [
-    '#exam-content',
-    '.proctor-panel',
-    '#gazeDot',
-    '#calOverlay',
-    '#webgazerVideoContainer',
-    '#webgazerVideoFeed',
-    '#webgazerCanvas',
-    '#webgazerFaceOverlay',
-    '#webgazerFaceFeedbackBox',
-    '#webgazerGazeDot'
-  ];
-
   function CheatingDetector() {
     this.history = [];
     this.events = [];
     this.cleanStreak = 0;
+    this.inLapZone = false;
+    this.inOffZone = false;
   }
 
   CheatingDetector.prototype._pushHistory = function (reasons) {
@@ -46,19 +41,22 @@
     return slice.filter(function (r) { return r.indexOf(reason) >= 0; }).length;
   };
 
-  CheatingDetector.prototype._isIgnoredElement = function (el) {
-    if (!el) return true;
-    for (var i = 0; i < IGNORE_SELECTORS.length; i++) {
-      if (el.closest(IGNORE_SELECTORS[i])) return true;
-    }
-    if (el.closest('.cal-backdrop') || el.closest('.top-bar')) return true;
-    return false;
+  CheatingDetector.prototype._zoneReasons = function (x, y) {
+    var reasons = [];
+
+    if (!this.inLapZone && y > LAP_ENTER_Y) this.inLapZone = true;
+    else if (this.inLapZone && y < LAP_EXIT_Y) this.inLapZone = false;
+    if (this.inLapZone) reasons.push('looking_down');
+
+    if (!this.inOffZone && (x < OFF_ENTER_X || x > 1 - OFF_ENTER_X)) this.inOffZone = true;
+    else if (this.inOffZone && x > OFF_EXIT_X && x < 1 - OFF_EXIT_X) this.inOffZone = false;
+    if (this.inOffZone) reasons.push('gaze_off_screen');
+
+    return reasons;
   };
 
   CheatingDetector.prototype.update = function (gaze, faceVisible) {
     var reasons = [];
-    var w = global.innerWidth;
-    var h = global.innerHeight;
 
     if (!faceVisible || !gaze || typeof gaze.x !== 'number' || typeof gaze.y !== 'number') {
       reasons.push('face_not_visible');
@@ -67,16 +65,10 @@
       return this._evaluate(reasons);
     }
 
-    var x = gaze.x / w;
-    var y = gaze.y / h;
+    var x = gaze.x / global.innerWidth;
+    var y = gaze.y / global.innerHeight;
 
-    if (y > LAP_ZONE_Y) reasons.push('looking_down');
-    if (x < OFF_SCREEN_X || x > 1 - OFF_SCREEN_X) reasons.push('gaze_off_screen');
-
-    var el = document.elementFromPoint(gaze.x, gaze.y);
-    if (el && !this._isIgnoredElement(el)) {
-      reasons.push('outside_exam_area');
-    }
+    reasons = this._zoneReasons(x, y);
 
     if (!reasons.length) {
       this.cleanStreak += 1;
@@ -98,30 +90,21 @@
 
     var countDown = this._countReason('looking_down', SUSPICIOUS_FRAMES);
     var countOff = this._countReason('gaze_off_screen', SUSPICIOUS_FRAMES);
-    var countOutside = this._countReason('outside_exam_area', SUSPICIOUS_FRAMES);
     var countFace = this._countReason('face_not_visible', WARNING_FRAMES);
     var warnDown = this._countReason('looking_down', WARNING_FRAMES);
     var warnOff = this._countReason('gaze_off_screen', WARNING_FRAMES);
-    var warnOutside = this._countReason('outside_exam_area', WARNING_FRAMES);
 
     if (countDown >= SUSPICIOUS_FRAMES) {
       return {
         status: 'suspicious',
-        messages: ['Looks like you have been looking down for a while — phone or notes on your desk?'],
+        messages: ['Looking down for a while — phone or notes on your desk?'],
         color: STATUS_COLORS.suspicious
       };
     }
     if (countOff >= SUSPICIOUS_FRAMES) {
       return {
         status: 'suspicious',
-        messages: ['Your gaze has been off to the side for a while — second screen or device?'],
-        color: STATUS_COLORS.suspicious
-      };
-    }
-    if (countOutside >= SUSPICIOUS_FRAMES) {
-      return {
-        status: 'suspicious',
-        messages: ['Your attention has been away from the exam for a while'],
+        messages: ['Gaze off to the side for a while — second screen or device?'],
         color: STATUS_COLORS.suspicious
       };
     }
@@ -129,28 +112,21 @@
     if (reasons.indexOf('face_not_visible') >= 0 && countFace >= WARNING_FRAMES) {
       return {
         status: 'warning',
-        messages: ['We cannot see your face — check your camera angle and lighting'],
+        messages: ['Cannot see your face — check camera angle and lighting'],
         color: STATUS_COLORS.warning
       };
     }
     if (warnDown >= WARNING_FRAMES) {
       return {
         status: 'warning',
-        messages: ['You glanced toward the bottom of the screen'],
+        messages: ['Glanced toward the bottom of the screen'],
         color: STATUS_COLORS.warning
       };
     }
     if (warnOff >= WARNING_FRAMES) {
       return {
         status: 'warning',
-        messages: ['You glanced toward the edge of the screen'],
-        color: STATUS_COLORS.warning
-      };
-    }
-    if (warnOutside >= WARNING_FRAMES) {
-      return {
-        status: 'warning',
-        messages: ['Your eyes moved outside the exam area'],
+        messages: ['Glanced toward the edge of the screen'],
         color: STATUS_COLORS.warning
       };
     }
