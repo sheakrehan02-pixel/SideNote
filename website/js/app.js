@@ -132,28 +132,28 @@
     btn.disabled = true;
     progress.textContent = 'Starting…';
 
-    SideNoteGaze.runCalibration(els.calOverlay, function (done, total, samples, needed) {
-      if (samples != null) {
-        progress.textContent = 'Point ' + done + '/' + total + ' — samples ' + samples + '/' + needed;
-      } else {
-        progress.textContent = done + ' / ' + total + ' points completed';
-      }
+    SideNoteGaze.runCalibration(els.calOverlay, function (done, total) {
+      progress.textContent = done + ' / ' + total + ' points completed';
     }).then(function (result) {
       btn.disabled = false;
       if (result.cancelled) {
         progress.textContent = 'Calibration cancelled — try again.';
         return;
       }
+      if (result.trainingPoints < 9) {
+        progress.textContent = 'Only ' + (result.trainingPoints || 0) + ' training samples saved — recalibrate with your face visible and good lighting.';
+        return;
+      }
       if (result.pointsCompleted < 9) {
         progress.textContent = 'Only ' + result.pointsCompleted + '/9 points — try again.';
         return;
       }
-      var sampleNote = result.totalSamples
-        ? ' (' + result.totalSamples + ' training samples collected)'
-        : '';
-      progress.textContent = 'All 9 points done' + sampleNote + '. Continue to the accuracy check or start the exam.';
+      progress.textContent = 'All 9 points done (' + result.trainingPoints + ' samples). Continue to the accuracy check or start the exam.';
       $('btnAfterCal').disabled = false;
       $('btnStartExam').disabled = false;
+    }).catch(function (err) {
+      btn.disabled = false;
+      progress.textContent = err.message || String(err);
     });
   }
 
