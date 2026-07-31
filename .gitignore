@@ -34,8 +34,13 @@ wheels/
 .DS_Store
 Thumbs.db
 
-# Backend data
-data/
+# Backend data (keep eval CSV templates tracked)
+data/*
+!data/eval/
+data/eval/**
+!data/eval/*.csv
+!data/eval/.gitkeep
+*.db
 
 # Virtual environment
 .venv/

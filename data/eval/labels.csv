@@ -1,0 +1,6 @@
+clip_id,behavior,label,notes
+20260731_normal_01,normal,none,Example row — replace with real clips
+20260731_looking_down_01,looking_down,suspicious,Eyes on phone/notes in lap for ~10s
+20260731_gaze_off_screen_01,gaze_off_screen,suspicious,Looking at second monitor
+20260731_phone_risk_01,phone_risk,suspicious,Looking down + hands in lap
+20260731_face_away_01,face_away,warning,Left camera frame ~5s
