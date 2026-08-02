@@ -1,6 +1,21 @@
-clip_id,behavior,label,notes
-20260731_normal_01,normal,none,Example row — replace with real clips
-20260731_looking_down_01,looking_down,suspicious,Eyes on phone/notes in lap for ~10s
-20260731_gaze_off_screen_01,gaze_off_screen,suspicious,Looking at second monitor
-20260731_phone_risk_01,phone_risk,suspicious,Looking down + hands in lap
-20260731_face_away_01,face_away,warning,Left camera frame ~5s
+clip_id,batch_id,scenario,duration_s,gt_primary_flag,gt_should_suspicious,gt_secondary_flags,cal_avg_error_px,cal_passed,notes
+20260802_normal_01,w1_scripted_20260802,normal,45,none,0,,120,1,scripted: calm center gaze
+20260802_normal_02,w1_scripted_20260802,normal,40,none,0,,120,1,scripted: mid-page reading y=0.55
+20260802_normal_03,w1_scripted_20260802,normal,50,none,0,,120,1,scripted: lower exam UI y=0.85 (known FP risk)
+20260802_normal_04,w1_scripted_20260802,normal,40,none,0,,120,1,scripted: brief edge glance then back (should not be suspicious)
+20260802_normal_05,w1_scripted_20260802,normal,45,none,0,,120,1,scripted: typing — small gaze drift in content band
+20260802_normal_06,w1_scripted_20260802,normal,40,none,0,,120,1,scripted: upper third reading
+20260802_looking_down_01,w1_scripted_20260802,looking_down,50,looking_down,1,,120,1,"scripted: sustained lap-zone gaze, hands on keyboard"
+20260802_looking_down_02,w1_scripted_20260802,looking_down,45,looking_down,1,,120,1,scripted: repeated down glances
+20260802_looking_down_03,w1_scripted_20260802,looking_down,50,looking_down,1,,120,1,scripted: phone in lap eyes down (no hands signal)
+20260802_looking_down_04,w1_scripted_20260802,looking_down,40,looking_down,1,,120,1,scripted: notes on desk — sustained down
+20260802_gaze_off_screen_01,w1_scripted_20260802,gaze_off_screen,50,gaze_off_screen,1,,120,1,scripted: sustained left second-monitor
+20260802_gaze_off_screen_02,w1_scripted_20260802,gaze_off_screen,45,gaze_off_screen,1,,120,1,scripted: sustained right edge
+20260802_gaze_off_screen_03,w1_scripted_20260802,gaze_off_screen,50,gaze_off_screen,1,,120,1,scripted: side look with return then long again
+20260802_gaze_off_screen_04,w1_scripted_20260802,gaze_off_screen,40,gaze_off_screen,1,,120,1,scripted: far left sustained
+20260802_hands_in_lap_01,w1_scripted_20260802,hands_in_lap,40,hands_in_lap,0,,120,1,"scripted: hands in lap, eyes on screen (warning ok, not suspicious)"
+20260802_hands_in_lap_02,w1_scripted_20260802,hands_in_lap,40,hands_in_lap,0,,120,1,"scripted: hands low, eyes mid-screen"
+20260802_phone_risk_01,w1_scripted_20260802,phone_risk,50,phone_risk,1,looking_down|hands_in_lap,120,1,scripted: looking_down + hands.inLap co-occurrence
+20260802_phone_risk_02,w1_scripted_20260802,phone_risk,50,phone_risk,1,looking_down|hands_in_lap,120,1,scripted: sustained phone_risk pattern
+20260802_face_away_01,w1_scripted_20260802,face_away,40,face_not_visible,1,,120,1,scripted: leave frame / cover cam sustained
+20260802_face_away_02,w1_scripted_20260802,face_away,35,face_not_visible,1,,120,1,scripted: face missing ~25 frames

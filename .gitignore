@@ -39,7 +39,10 @@ data/*
 !data/eval/
 data/eval/**
 !data/eval/*.csv
+!data/eval/*.json
 !data/eval/.gitkeep
+!data/eval/clips/
+!data/eval/clips/.gitkeep
 *.db
 
 # Virtual environment

@@ -16,6 +16,7 @@ from backend.models import (
     CreateSessionRequest,
     EventRequest,
     HealthResponse,
+    IdentityRequest,
     SessionCreatedResponse,
     SessionSummary,
     SubmitReportRequest,
@@ -49,11 +50,19 @@ def create_app() -> FastAPI:
 
     @app.post("/api/sessions", response_model=SessionCreatedResponse)
     def create_session(body: CreateSessionRequest) -> SessionCreatedResponse:
+        calibration = None
+        if body.calibration:
+            # Accept either CalibrationRequest-shaped dict or already-normalized payload
+            try:
+                calibration = CalibrationRequest(**body.calibration).normalized()
+            except Exception:
+                calibration = body.calibration
         session = db.create_session(
             student_name=body.student_name,
             exam_id=body.exam_id,
+            calibration=calibration,
         )
-        return SessionCreatedResponse(**session)
+        return SessionCreatedResponse(**{k: session[k] for k in ("id", "student_name", "exam_id", "status", "created_at")})
 
     @app.get("/api/sessions", response_model=list[SessionSummary])
     def list_sessions(limit: int = 50) -> list[SessionSummary]:
@@ -70,8 +79,18 @@ def create_app() -> FastAPI:
     @app.post("/api/sessions/{session_id}/calibration")
     def record_calibration(session_id: str, body: CalibrationRequest) -> JSONResponse:
         try:
-            db.save_calibration(session_id, body.model_dump())
-            return JSONResponse({"ok": True, "session_id": session_id})
+            payload = body.normalized()
+            db.save_calibration(session_id, payload)
+            return JSONResponse({"ok": True, "session_id": session_id, "calibration": payload})
+        except KeyError:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+    @app.post("/api/sessions/{session_id}/identity")
+    def record_identity(session_id: str, body: IdentityRequest) -> JSONResponse:
+        name = body.student_name.strip()
+        try:
+            db.update_student_name(session_id, name)
+            return JSONResponse({"ok": True, "session_id": session_id, "student_name": name})
         except KeyError:
             raise HTTPException(status_code=404, detail="Session not found")
 

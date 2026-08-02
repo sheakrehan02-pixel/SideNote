@@ -62,18 +62,43 @@
     </section>
 
     <section class="panel" data-step-panel hidden>
-      <h2>A few things before we start</h2>
-      <p>Eye tracking works a lot better when the setup is right. Take a quick look at this list:</p>
-      <ul class="checklist">
-        <li><strong>Lighting</strong> Your face should be lit from the front. Try to avoid sitting with a bright window behind you.</li>
-        <li><strong>Distance</strong> Sit about an arm's length from the screen (~50–70 cm) and try to keep that distance.</li>
-        <li><strong>Head still</strong> Move your eyes to look around — don't move your head or lean in/out.</li>
-        <li><strong>Camera</strong> Webcam at eye level works best. Glasses are fine; sunglasses won't work.</li>
-        <li><strong>Full screen</strong> Maximize this window — calibration is tied to your screen size.</li>
-      </ul>
+      <h2>Confirm your environment <span style="font-weight:400;color:var(--muted);font-size:0.9em">(required)</span></h2>
+      <p>Confirm each item before calibration. Eye tracking depends on lighting, distance, and a full-size window.</p>
+      <div class="env-checklist" id="envChecklist" role="group" aria-labelledby="envChecklistHeading">
+        <span id="envChecklistHeading" class="visually-hidden">Environment confirmations</span>
+        <label class="env-check">
+          <input type="checkbox" id="envLighting" name="env_lighting">
+          <span class="env-check-body">
+            <strong>Lighting</strong>
+            My face is lit from the front — no bright window or lamp behind me.
+          </span>
+        </label>
+        <label class="env-check">
+          <input type="checkbox" id="envDistance" name="env_distance">
+          <span class="env-check-body">
+            <strong>Distance</strong>
+            I am about an arm’s length from the screen (~50–70 cm) and will stay there.
+          </span>
+        </label>
+        <div class="env-check env-check-fs">
+          <label class="env-check-label">
+            <input type="checkbox" id="envFullscreen" name="env_fullscreen">
+            <span class="env-check-body">
+              <strong>Fullscreen / maximized</strong>
+              This window fills the screen. Calibration is tied to window size.
+            </span>
+          </label>
+          <div class="env-fs-actions">
+            <button type="button" class="btn btn-secondary" id="btnEnterFullscreen">Enter fullscreen</button>
+            <p class="env-fs-status" id="envFullscreenStatus" aria-live="polite">Not in fullscreen yet</p>
+          </div>
+        </div>
+      </div>
+      <p class="env-tips">Also: webcam at eye level · move eyes, not your head · glasses OK, no sunglasses.</p>
+      <p class="env-hint" id="envChecklistHint">Check all three items to continue.</p>
       <div class="btn-row">
         <button type="button" class="btn btn-secondary" id="btnBackChecklist">← Back</button>
-        <button type="button" class="btn btn-primary" id="btnReadyChecklist">I'm ready — calibrate →</button>
+        <button type="button" class="btn btn-primary" id="btnReadyChecklist" disabled>I'm ready — calibrate →</button>
       </div>
     </section>
 
@@ -91,16 +116,32 @@
     </section>
 
     <section class="panel" data-step-panel hidden>
-      <h2>Accuracy check <span style="font-weight:400;color:var(--muted);font-size:0.9em">(optional)</span></h2>
-      <p>You can skip this and go straight to the exam. This step shows a warm-colored dot following your gaze so you can see if tracking feels right.</p>
+      <h2>Accuracy check <span style="font-weight:400;color:var(--muted);font-size:0.9em">(required)</span></h2>
+      <p>
+        Gaze tracking must pass before the exam starts.
+        Target: average error under <strong id="accuracyThresholdLabel">180</strong> px
+        (configurable via <code>SIDE_NOTE_ACCURACY_THRESHOLD_PX</code>).
+      </p>
       <div class="btn-row">
         <button type="button" class="btn btn-primary" id="btnRunValidation">Run accuracy check</button>
         <button type="button" class="btn btn-secondary" id="btnRecalibrate" disabled>← Recalibrate</button>
       </div>
       <p class="validation-result" id="validationResult"></p>
+      <div class="identity-block">
+        <label for="studentIdentity">Your name or email <span aria-hidden="true">*</span></label>
+        <input
+          type="text"
+          id="studentIdentity"
+          name="student_identity"
+          autocomplete="name"
+          required
+          placeholder="Ada Lovelace or ada@school.edu"
+          maxlength="120"
+        >
+        <p class="identity-hint" id="studentIdentityHint">Required before starting the exam. Saved with your session report.</p>
+      </div>
       <div class="btn-row">
         <button type="button" class="btn btn-primary" id="btnStartExam" disabled>Start practice exam →</button>
-        <button type="button" class="btn btn-secondary" id="btnContinueAnyway" disabled>Continue anyway</button>
       </div>
     </section>
 
@@ -121,14 +162,18 @@
             <input type="text" id="q3" placeholder="Your answer">
           </div>
           <p style="color: var(--muted); font-size: 0.85rem; margin-top: 8px;">
-            Try looking at the bottom of the screen or far left/right briefly — the proctor panel will flag sustained off-screen gaze.
+            Try looking down with hands in your lap, or off to the side — the Integrity panel shows named signals like <code>phone_risk</code>.
           </p>
         </div>
         <aside class="proctor-panel">
-          <h4>What we're watching</h4>
+          <h4>Integrity monitor</h4>
           <div class="exam-meta">Time: <span id="examTimer">00:00</span></div>
           <div class="status-badge" id="statusBadge" style="background:#7a9e6a">OK</div>
-          <ul id="statusMessages"><li class="ok-msg">Looking good — eyes on the exam</li></ul>
+          <div class="active-flags" id="activeFlags">
+            <p class="ok-msg" id="activeFlagsEmpty">No active signals — eyes on the exam</p>
+            <ul id="activeFlagsList" hidden></ul>
+          </div>
+          <p class="status-detail" id="statusDetail"></p>
           <h4>Live log</h4>
           <ul id="eventLog"></ul>
           <label class="toggle-row">
@@ -136,8 +181,11 @@
             Show where I'm looking
           </label>
           <div class="zone-legend">
-            <p><span class="zone-warn"></span> Bottom zone = lap/desk</p>
-            <p><span class="zone-flag"></span> Left/right edges = off-screen</p>
+            <p><span class="zone-flag phone"></span> <strong>phone_risk</strong> — look down + hands low</p>
+            <p><span class="zone-warn"></span> <strong>looking_down</strong> — desk / lap gaze</p>
+            <p><span class="zone-flag"></span> <strong>gaze_off_screen</strong> — side / second screen</p>
+            <p><span class="zone-warn"></span> <strong>hands_in_lap</strong> — wrists below chin</p>
+            <p><span class="zone-flag"></span> <strong>face_not_visible</strong> — left frame / covered</p>
           </div>
           <div class="btn-row" style="margin-top:16px">
             <button type="button" class="btn btn-danger" id="btnFinishExam">Submit exam</button>
@@ -151,6 +199,9 @@
       <p>Integrity score (demo heuristic — not a legal proctoring verdict):</p>
       <div class="score-ring"><span id="integrityScore">100</span>/100</div>
       <div id="reportSummary"></div>
+      <h3 style="margin-top:20px;font-size:1rem">Evidence snapshots</h3>
+      <p class="evidence-hint">Webcam stills from suspicious / phone_risk signals — click a thumbnail to enlarge.</p>
+      <div id="reportEvidence" class="evidence-grid" aria-live="polite"></div>
       <h3 style="margin-top:20px;font-size:1rem">Incident log</h3>
       <ul id="reportEvents"></ul>
       <div class="btn-row">
@@ -163,8 +214,42 @@
   <div id="gazeDot" aria-hidden="true"></div>
   <div id="calOverlay" aria-live="polite"></div>
 
+  <!-- Accuracy gate: avg gaze error must be ≤ this (px) to start exam. -->
+  <script>
+    window.SIDE_NOTE_ACCURACY_THRESHOLD_PX = 180;
+  </script>
+
+  <!-- MediaPipe Face Mesh (jsDelivr). WASM/.data assets resolve via SIDE_NOTE_FACE_MESH_CDN + locateFile. -->
+  <script>
+    window.SIDE_NOTE_FACE_MESH_CDN =
+      'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/';
+    window._faceMeshSource = 'pending';
+  </script>
+  <script
+    src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh.js"
+    crossorigin="anonymous"
+    onload="window._faceMeshSource = 'cdn'"
+    onerror="window._faceMeshSource = 'none'"
+  ></script>
+
+  <!-- MediaPipe Hands (jsDelivr). -->
+  <script>
+    window.SIDE_NOTE_HANDS_CDN =
+      'https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/';
+    window._handsSource = 'pending';
+  </script>
+  <script
+    src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js"
+    crossorigin="anonymous"
+    onload="window._handsSource = 'cdn'"
+    onerror="window._handsSource = 'none'"
+  ></script>
+
   <script src="js/api-client.js"></script>
   <script src="js/gaze-engine.js"></script>
+  <script src="js/face-engine.js"></script>
+  <script src="js/hand-engine.js"></script>
+  <script src="js/evidence-capture.js"></script>
   <script src="js/cheating-detector.js"></script>
   <script src="js/app.js"></script>
 </body>

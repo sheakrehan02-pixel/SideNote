@@ -466,9 +466,16 @@
     }
   }
 
+  /**
+   * Accuracy gate threshold (px). Override with window.SIDE_NOTE_ACCURACY_THRESHOLD_PX.
+   * Default 180 — avg gaze error must be under this to start the exam.
+   */
   function getPassThresholdPx() {
-    var d = Math.sqrt(global.innerWidth * global.innerWidth + global.innerHeight * global.innerHeight);
-    return Math.max(120, Math.min(350, d * 0.12));
+    var configured = global.SIDE_NOTE_ACCURACY_THRESHOLD_PX;
+    if (typeof configured === 'number' && isFinite(configured) && configured > 0) {
+      return configured;
+    }
+    return 180;
   }
 
   function warmupAfterCalibration(ms) {
@@ -583,7 +590,8 @@
         passThresholdPx: passThreshold,
         pointsMeasured: validErrors.length,
         pointsUnderThreshold: pointsUnderThreshold,
-        passed: validErrors.length >= 5 && (avg < passThreshold || pointsUnderThreshold >= 5),
+        // Hard gate: enough samples and average error at or under configured threshold
+        passed: validErrors.length >= 5 && avg != null && avg <= passThreshold,
         noTracking: validErrors.length === 0
       };
     });

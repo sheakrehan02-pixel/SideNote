@@ -1,0 +1,52 @@
+{
+  "date": "2026-08-02",
+  "tag": "week1",
+  "batch_id": "w1_scripted_20260802",
+  "method": "scripted_detector",
+  "clips": 20,
+  "suspicious": {
+    "tp": 11,
+    "fp": 1,
+    "fn": 1,
+    "tn": 7,
+    "precision": 0.9166666666666666,
+    "recall": 0.9166666666666666,
+    "f1": 0.9166666666666666
+  },
+  "phone_risk": {
+    "tp": 2,
+    "fp": 0,
+    "fn": 0,
+    "precision": 1,
+    "recall": 1
+  },
+  "false_suspicious_on_normal": "1 / 6",
+  "by_flag": {
+    "looking_down": {
+      "tp": 4,
+      "fp": 1,
+      "fn": 0
+    },
+    "gaze_off_screen": {
+      "tp": 4,
+      "fp": 0,
+      "fn": 0
+    },
+    "hands_in_lap": {
+      "tp": 2,
+      "fp": 0,
+      "fn": 0
+    },
+    "phone_risk": {
+      "tp": 2,
+      "fp": 0,
+      "fn": 0
+    },
+    "face_not_visible": {
+      "tp": 2,
+      "fp": 0,
+      "fn": 0
+    }
+  },
+  "biggest_failure_mode": "Honest lower-exam-UI reading (y≈0.85) still triggers looking_down→suspicious without hands, so normal clips inflate false suspicious rate and phone_risk cannot fully replace gaze-only down flags."
+}

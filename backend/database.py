@@ -68,16 +68,20 @@ def get_connection() -> Generator[sqlite3.Connection, None, None]:
 def create_session(
     student_name: str | None = None,
     exam_id: str = "practice-biology",
+    calibration: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     session_id = str(uuid4())
     created_at = _utc_now()
+    calibration_json = json.dumps(calibration) if calibration else None
     with get_connection() as conn:
         conn.execute(
             """
-            INSERT INTO sessions (id, student_name, exam_id, status, created_at)
-            VALUES (?, ?, ?, 'active', ?)
+            INSERT INTO sessions (
+                id, student_name, exam_id, status, created_at, calibration_json
+            )
+            VALUES (?, ?, ?, 'active', ?, ?)
             """,
-            (session_id, student_name, exam_id, created_at),
+            (session_id, student_name, exam_id, created_at, calibration_json),
         )
     return {
         "id": session_id,
@@ -85,6 +89,7 @@ def create_session(
         "exam_id": exam_id,
         "status": "active",
         "created_at": created_at,
+        "calibration": calibration,
     }
 
 
@@ -116,6 +121,19 @@ def save_calibration(session_id: str, calibration: dict[str, Any]) -> None:
         conn.execute(
             "UPDATE sessions SET calibration_json = ? WHERE id = ?",
             (json.dumps(calibration), session_id),
+        )
+
+
+def update_student_name(session_id: str, student_name: str | None) -> None:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT id FROM sessions WHERE id = ?", (session_id,)
+        ).fetchone()
+        if row is None:
+            raise KeyError(session_id)
+        conn.execute(
+            "UPDATE sessions SET student_name = ? WHERE id = ?",
+            (student_name, session_id),
         )
 
 

@@ -95,9 +95,15 @@ Extra probes (same session): gaze-only “phone in lap” only emits `looking_do
 
 **Bottom-of-screen exam reading is indistinguishable from phone-in-lap, and the demo lets bad calibration produce a scored report anyway.**
 
+### Day 7 update (2026-08-02 — scripted 20-clip baseline)
+
+See [`WEEK1_EVAL.md`](./WEEK1_EVAL.md). Scripted suspicious **P/R/F1 ≈ 91.7%**; false suspicious on normal **1/6**; `phone_risk` co-occurrence **2/2**.
+
+**Week 1 biggest failure mode is that honest lower-exam-UI reading still looks identical to phone-in-lap on gaze alone (`looking_down` → suspicious at y≈0.85), so one normal clip creates a false suspicious while `phone_risk` only helps when hands are available — and interrupted looking-down still under-fires.**
+
 ---
 
 ## Next measurements
 
-- Day 7: ≥20 labeled clips per `EVAL_PROTOCOL.md` → `data/eval/results_week1.csv`
-- Re-run `node scripts/baseline_probe.js` after Day 2–4 detector changes; expect Run 2 to stop reaching suspicious without hands, and `phone_risk` to appear when both signals fire.
+- Replace scripted rows with live Method A clips (≥20) in `data/eval/`; re-score.
+- Week 2: raise lap threshold / require hands before `looking_down` suspicious; tune dwell for intermittent downs.

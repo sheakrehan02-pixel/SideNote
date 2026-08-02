@@ -50,10 +50,29 @@ function runScenario(name, steps) {
   let last = 'ok';
   for (let i = 0; i < steps.length; i++) {
     const s = steps[i];
-    const result = d.update(s.gaze, s.faceVisible !== false);
+    const result = d.update({
+      gaze: s.gaze,
+      faceVisible: s.faceVisible !== false,
+      hands: s.hands != null ? s.hands : null,
+      headPose: s.headPose != null ? s.headPose : null,
+      facesCount: typeof s.facesCount === 'number' ? s.facesCount : null
+    });
     if (result.status !== last) {
-      timeline.push({ frame: i, status: result.status, messages: result.messages.slice() });
-      d.logEvent(result.status, result.messages);
+      timeline.push({
+        frame: i,
+        status: result.status,
+        messages: result.messages.slice(),
+        flags: (result.flags || []).map(function (f) {
+          return {
+            id: f.id,
+            severity: f.severity,
+            confidence: f.confidence,
+            startedAt: f.startedAt,
+            message: f.message
+          };
+        })
+      });
+      d.logEvent(result.status, result.messages, result.flags);
       last = result.status;
     }
   }
@@ -94,11 +113,30 @@ const runFace = runScenario('probe_face_missing', Array.from({ length: 20 }, () 
   faceVisible: false,
 })));
 
-const runNoHands = {
-  name: 'probe_hands_phone_risk',
-  note: 'Web detector has no hands/phone_risk — desktop-only gap',
-  phone_risk_emitted: false,
-};
+// Co-occurrence: looking_down + hands.inLap → phone_risk
+const runPhoneRiskSteps = [];
+for (let i = 0; i < 5; i++) {
+  runPhoneRiskSteps.push({ gaze: gaze(0.5, 0.4), faceVisible: true, hands: { inLap: false, count: 0 } });
+}
+for (let i = 0; i < 22; i++) {
+  runPhoneRiskSteps.push({
+    gaze: gaze(0.5, 0.9),
+    faceVisible: true,
+    hands: { inLap: true, count: 1 }
+  });
+}
+const runPhoneRisk = runScenario('probe_phone_risk_cooccurrence', runPhoneRiskSteps);
 
-const results = [run1, run2, run3, runPhone, runFace, runNoHands];
+// Hands alone (eyes on screen) — should not become phone_risk
+const runHandsOnlySteps = [];
+for (let i = 0; i < 15; i++) {
+  runHandsOnlySteps.push({
+    gaze: gaze(0.5, 0.45),
+    faceVisible: true,
+    hands: { inLap: true, count: 2 }
+  });
+}
+const runHandsOnly = runScenario('probe_hands_only', runHandsOnlySteps);
+
+const results = [run1, run2, run3, runPhone, runFace, runPhoneRisk, runHandsOnly];
 console.log(JSON.stringify(results, null, 2));

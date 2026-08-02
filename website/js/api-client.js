@@ -5,6 +5,7 @@
   'use strict';
 
   var sessionId = null;
+  var pendingCalibration = null;
   var backendOnline = false;
   var healthTimer = null;
 
@@ -68,28 +69,85 @@
     }
   }
 
-  function createSession(studentName) {
+  /**
+   * Canonical calibration payload for create/submit/calibration endpoints.
+   * { avg_error_px, passed, points }
+   */
+  function normalizeCalibration(cal) {
+    if (!cal) return null;
+    var points = cal.points;
+    if (points == null) points = cal.points_completed;
+    if (points == null) points = 0;
+    return {
+      avg_error_px: cal.avg_error_px != null ? cal.avg_error_px : null,
+      passed: !!cal.passed,
+      points: points,
+      pass_threshold_px: cal.pass_threshold_px != null ? cal.pass_threshold_px : null,
+      training_samples: cal.training_samples != null ? cal.training_samples : null,
+      cancelled: !!cal.cancelled
+    };
+  }
+
+  function createSession(studentName, calibration) {
+    var cal = normalizeCalibration(calibration != null ? calibration : pendingCalibration);
     return request('/api/sessions', {
       method: 'POST',
       body: {
         student_name: studentName || null,
-        exam_id: 'practice-biology'
+        exam_id: 'practice-biology',
+        calibration: cal
       }
     }).then(function (data) {
       sessionId = data.id;
+      if (cal) pendingCalibration = cal;
       return data;
     });
   }
 
+  /**
+   * Persist calibration. If session does not exist yet, stash and no-op until
+   * createSession — then flush. Fixes early-null sessionId during validation.
+   */
   function saveCalibration(calibration) {
-    if (!sessionId) return Promise.resolve(null);
+    var cal = normalizeCalibration(calibration);
+    pendingCalibration = cal;
+    if (!sessionId) return Promise.resolve({ queued: true, calibration: cal });
     return request('/api/sessions/' + sessionId + '/calibration', {
       method: 'POST',
-      body: calibration
+      body: cal
     }).catch(function (err) {
       console.warn('Calibration save failed:', err.message);
       return null;
     });
+  }
+
+  function ensureSession(studentName, calibration) {
+    var cal = normalizeCalibration(calibration != null ? calibration : pendingCalibration);
+    var name = studentName ? String(studentName).trim() : null;
+
+    if (sessionId) {
+      var tasks = [];
+      if (cal) {
+        tasks.push(
+          request('/api/sessions/' + sessionId + '/calibration', {
+            method: 'POST',
+            body: cal
+          }).catch(function () { return null; })
+        );
+      }
+      if (name) {
+        tasks.push(
+          request('/api/sessions/' + sessionId + '/identity', {
+            method: 'POST',
+            body: { student_name: name }
+          }).catch(function () { return null; })
+        );
+      }
+      return Promise.all(tasks).then(function () {
+        return { id: sessionId, student_name: name };
+      });
+    }
+    return createSession(name, cal);
   }
 
   function recordEvent(status, messages) {
@@ -104,15 +162,24 @@
   }
 
   function submitReport(report) {
-    if (!sessionId) return Promise.resolve(null);
+    var cal = normalizeCalibration(
+      report && report.calibration != null ? report.calibration : pendingCalibration
+    );
+    if (!sessionId) {
+      // Last-chance: create session with calibration then submit
+      return createSession(null, cal).then(function () {
+        return submitReport(Object.assign({}, report, { calibration: cal }));
+      });
+    }
     var payload = {
       integrity_score: report.integrityScore,
       suspicious_count: report.suspiciousCount,
       warning_count: report.warningCount,
       duration_seconds: report.durationSeconds || 0,
       events: report.events || [],
-      calibration: report.calibration || null,
-      viewport: report.viewport || null
+      calibration: cal,
+      viewport: report.viewport || null,
+      evidence: report.evidence || []
     };
     return request('/api/sessions/' + sessionId + '/submit', {
       method: 'POST',
@@ -125,14 +192,19 @@
 
   function getSessionId() { return sessionId; }
   function isOnline() { return backendOnline; }
-  function resetSession() { sessionId = null; }
+  function resetSession() {
+    sessionId = null;
+    pendingCalibration = null;
+  }
 
   global.SideNoteAPI = {
     checkHealth: checkHealth,
     startHealthMonitor: startHealthMonitor,
     stopHealthMonitor: stopHealthMonitor,
     createSession: createSession,
+    ensureSession: ensureSession,
     saveCalibration: saveCalibration,
+    normalizeCalibration: normalizeCalibration,
     recordEvent: recordEvent,
     submitReport: submitReport,
     getSessionId: getSessionId,
