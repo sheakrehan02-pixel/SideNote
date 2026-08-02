@@ -344,19 +344,22 @@
     // Clear after tracker is up — clearData before begin() can throw in WebGazer
     SideNoteGaze.start(function () {})
       .then(function () {
-        return SideNoteGaze.clearTrainingData();
+        // Best-effort reset; never block continuing if clearData is flaky
+        return SideNoteGaze.clearTrainingData().catch(function () { return null; });
       })
       .then(function () {
         SideNoteGaze.styleWebGazerPreview();
         // Warm Face Mesh + Hands on the same video during checklist/calibration
         startVisionEngines();
+        btn.disabled = false;
         btn.textContent = 'Camera ready';
         nextStep();
       })
       .catch(function (err) {
         btn.disabled = false;
         btn.textContent = 'Allow camera & continue';
-        alert(err.message || String(err));
+        var msg = (err && err.message) ? err.message : String(err);
+        alert(msg);
       });
   }
 

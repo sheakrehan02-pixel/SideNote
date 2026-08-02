@@ -169,6 +169,11 @@
     }
     if (wg.params) {
       wg.params.saveDataAcrossSessions = false;
+      // Default "./mediapipe/face_mesh" is not shipped — begin() then dies in
+      // TFFaceMesh.init with "t is not a function" after the camera preview appears.
+      wg.params.faceMeshSolutionPath =
+        global.SIDE_NOTE_WEBGZER_FACE_MESH_CDN ||
+        'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619';
       wg.params.showVideo = true;
       wg.params.showFaceOverlay = false;
       wg.params.showFaceFeedbackBox = true;
@@ -177,8 +182,8 @@
     }
 
     if (typeof wg.setRegression === 'function') {
-      try { wg.setRegression('weightedRidge'); } catch (e1) {
-        try { wg.setRegression('ridge'); } catch (e2) {}
+      try { wg.setRegression('ridge'); } catch (e1) {
+        try { wg.setRegression('weightedRidge'); } catch (e2) {}
       }
     }
     if (typeof wg.setTracker === 'function') {
@@ -316,9 +321,9 @@
         beginResult = wg.begin();
       } catch (err) {
         var msg = (err && err.message) ? err.message : String(err);
-        if (/is not a function/i.test(msg)) {
+        if (/is not a function/i.test(msg) || /Failed to fetch|Load failed|404/i.test(msg)) {
           throw new Error(
-            'Eye tracker failed to start (WebGazer init). Hard-refresh, allow camera, and try again in Chrome.'
+            'Eye tracker face model failed to load. Check your network (jsDelivr CDN), hard-refresh, and try again in Chrome.'
           );
         }
         throw err;
@@ -347,9 +352,9 @@
         state.rafId = global.requestAnimationFrame(loop);
       }).catch(function (err) {
         var msg = (err && err.message) ? err.message : String(err);
-        if (/is not a function/i.test(msg)) {
+        if (/is not a function/i.test(msg) || /Failed to fetch|Load failed|404/i.test(msg)) {
           throw new Error(
-            'Eye tracker failed to start (WebGazer init). Hard-refresh, allow camera, and try again in Chrome.'
+            'Eye tracker face model failed to load. Check your network (jsDelivr CDN), hard-refresh, and try again in Chrome.'
           );
         }
         throw err;
