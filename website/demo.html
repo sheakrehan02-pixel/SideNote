@@ -9,23 +9,41 @@
   <script>
     window.saveDataAcrossSessions = false;
     (function () {
+      // Prefer local bundle on Vercel — CDN can race / fail and leave a broken global.
       var done = false;
-      function tryLocal() {
+      function mark(src) {
         if (done) return;
         done = true;
+        window._webgazerSource = src;
+      }
+      function load(src, label, onFail) {
         var s = document.createElement('script');
-        s.src = 'js/webgazer.js';
-        s.onload = function () { window._webgazerSource = 'local'; };
-        s.onerror = function () { window._webgazerSource = 'none'; };
+        s.src = src;
+        if (label === 'cdn') s.crossOrigin = 'anonymous';
+        s.onload = function () {
+          if (typeof window.webgazer !== 'undefined' && typeof window.webgazer.begin === 'function') {
+            try {
+              if (typeof window.webgazer.saveDataAcrossSessions === 'function') {
+                window.webgazer.saveDataAcrossSessions(false);
+              }
+              if (window.webgazer.params) window.webgazer.params.saveDataAcrossSessions = false;
+            } catch (e) {}
+            mark(label);
+          } else if (onFail) {
+            onFail();
+          } else {
+            window._webgazerSource = 'none';
+          }
+        };
+        s.onerror = function () {
+          if (onFail) onFail();
+          else if (!done) window._webgazerSource = 'none';
+        };
         document.head.appendChild(s);
       }
-      var s = document.createElement('script');
-      s.src = 'https://webgazer.cs.brown.edu/webgazer.js';
-      s.crossOrigin = 'anonymous';
-      s.onload = function () { done = true; window._webgazerSource = 'cdn'; };
-      s.onerror = tryLocal;
-      document.head.appendChild(s);
-      setTimeout(function () { if (!done) tryLocal(); }, 8000);
+      load('js/webgazer.js', 'local', function () {
+        load('https://webgazer.cs.brown.edu/webgazer.js', 'cdn', null);
+      });
     })();
   </script>
 </head>

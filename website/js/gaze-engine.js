@@ -162,6 +162,20 @@
     var wg = global.webgazer;
     if (!wg) return;
 
+    // WebGazer defaults saveDataAcrossSessions=true; corrupted IndexedDB
+    // data can throw "t is not a function" inside begin()/clearData().
+    if (typeof wg.saveDataAcrossSessions === 'function') {
+      try { wg.saveDataAcrossSessions(false); } catch (e0) {}
+    }
+    if (wg.params) {
+      wg.params.saveDataAcrossSessions = false;
+      wg.params.showVideo = true;
+      wg.params.showFaceOverlay = false;
+      wg.params.showFaceFeedbackBox = true;
+      wg.params.showGazeDot = false;
+      wg.params.moveTickSize = 50;
+    }
+
     if (typeof wg.setRegression === 'function') {
       try { wg.setRegression('weightedRidge'); } catch (e1) {
         try { wg.setRegression('ridge'); } catch (e2) {}
@@ -172,13 +186,6 @@
     }
     if (typeof wg.applyKalmanFilter === 'function') {
       try { wg.applyKalmanFilter(true); } catch (e) {}
-    }
-    if (wg.params) {
-      wg.params.showVideo = true;
-      wg.params.showFaceOverlay = false;
-      wg.params.showFaceFeedbackBox = true;
-      wg.params.showGazeDot = false;
-      wg.params.moveTickSize = 50;
     }
     setWebGazerDebug(false);
     if (typeof wg.showVideo === 'function') wg.showVideo(true);
@@ -234,8 +241,18 @@
     state.lastFaceTime = 0;
     resetSmoothing();
     disableMouseCalibration();
+    if (typeof wg.saveDataAcrossSessions === 'function') {
+      try { wg.saveDataAcrossSessions(false); } catch (e0) {}
+    }
+    if (wg.params) wg.params.saveDataAcrossSessions = false;
     if (typeof wg.clearData === 'function') {
-      return Promise.resolve(wg.clearData());
+      try {
+        return Promise.resolve(wg.clearData()).catch(function () {
+          return null;
+        });
+      } catch (e) {
+        return Promise.resolve();
+      }
     }
     return Promise.resolve();
   }
@@ -287,9 +304,26 @@
       state.listener = onGaze || null;
 
       var wg = global.webgazer;
+      if (typeof wg.setGazeListener !== 'function' || typeof wg.begin !== 'function') {
+        throw new Error('WebGazer loaded incorrectly. Hard-refresh the page and try Chrome or Edge.');
+      }
+
       wg.setGazeListener(onGazeData);
 
-      var beginResult = typeof wg.begin === 'function' ? wg.begin() : null;
+      // begin([onFail]) — onFail must be a function; omit and use promise catch
+      var beginResult;
+      try {
+        beginResult = wg.begin();
+      } catch (err) {
+        var msg = (err && err.message) ? err.message : String(err);
+        if (/is not a function/i.test(msg)) {
+          throw new Error(
+            'Eye tracker failed to start (WebGazer init). Hard-refresh, allow camera, and try again in Chrome.'
+          );
+        }
+        throw err;
+      }
+
       return Promise.resolve(beginResult).then(function () {
         return waitForVideoReady(12000);
       }).then(function (ready) {
@@ -311,6 +345,14 @@
           state.rafId = global.requestAnimationFrame(loop);
         }
         state.rafId = global.requestAnimationFrame(loop);
+      }).catch(function (err) {
+        var msg = (err && err.message) ? err.message : String(err);
+        if (/is not a function/i.test(msg)) {
+          throw new Error(
+            'Eye tracker failed to start (WebGazer init). Hard-refresh, allow camera, and try again in Chrome.'
+          );
+        }
+        throw err;
       });
     });
   }

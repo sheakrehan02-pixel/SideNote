@@ -341,8 +341,11 @@
 
     if (window.saveDataAcrossSessions !== undefined) window.saveDataAcrossSessions = false;
 
-    SideNoteGaze.clearTrainingData();
+    // Clear after tracker is up — clearData before begin() can throw in WebGazer
     SideNoteGaze.start(function () {})
+      .then(function () {
+        return SideNoteGaze.clearTrainingData();
+      })
       .then(function () {
         SideNoteGaze.styleWebGazerPreview();
         // Warm Face Mesh + Hands on the same video during checklist/calibration
