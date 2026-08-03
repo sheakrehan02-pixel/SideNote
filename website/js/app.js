@@ -16,6 +16,15 @@
   var faceMissStreak = 0;
   var studentIdentity = '';
   var environmentConfirmedAt = null;
+  var cameraPaused = false;
+  var cameraReconnectBusy = false;
+  /** Soft tab-blur note (info, score 0). Skip gaze scoring while the tab is hidden. */
+  var TAB_BLUR_SOFT_MS = 1500;
+  var tabHidden = false;
+  var tabHideStartedAt = null;
+  var tabBlurLoggedForHide = false;
+  var tabBlurTimer = null;
+  var tabBlurWatching = false;
 
   var els = {};
 
@@ -25,7 +34,8 @@
     gaze_off_screen: 'Gaze off-screen (side)',
     face_not_visible: 'Face not visible',
     hands_in_lap: 'Hands low / in lap zone',
-    phone_risk: 'Possible phone / notes in lap'
+    phone_risk: 'Possible phone / notes in lap',
+    tab_blur: 'Left exam tab'
   };
 
   var ENV_CHECK_IDS = ['envLighting', 'envDistance', 'envFullscreen'];
@@ -37,15 +47,21 @@
     els.gazeDot = $('gazeDot');
     els.calOverlay = $('calOverlay');
     els.statusBadge = $('statusBadge');
-    els.activeFlagsEmpty = $('activeFlagsEmpty');
-    els.activeFlagsList = $('activeFlagsList');
     els.statusDetail = $('statusDetail');
+    els.currentSignal = $('currentSignal');
+    els.currentSignalSeverity = $('currentSignalSeverity');
+    els.currentSignalTitle = $('currentSignalTitle');
+    els.currentSignalMsg = $('currentSignalMsg');
+    els.currentSignalId = $('currentSignalId');
+    els.cameraPauseBanner = $('cameraPauseBanner');
+    els.cameraPauseMsg = $('cameraPauseMsg');
+    els.btnReconnectCamera = $('btnReconnectCamera');
     els.examTimer = $('examTimer');
     els.integrityScore = $('integrityScore');
-    els.eventLog = $('eventLog');
     els.reportSummary = $('reportSummary');
     els.reportEvents = $('reportEvents');
     els.reportEvidence = $('reportEvidence');
+    els.scoreBreakdown = $('scoreBreakdown');
     els.studentIdentity = $('studentIdentity');
     els.studentIdentityHint = $('studentIdentityHint');
     els.envLighting = $('envLighting');
@@ -63,6 +79,20 @@
     return FLAG_LABELS[id] || id;
   }
 
+  /** Human-facing severity labels — never show raw "CHEATING" / "SUSPICIOUS". */
+  function severityDisplayLabel(severity) {
+    var s = String(severity || '').toLowerCase();
+    if (s === 'suspicious') return 'Needs review';
+    if (s === 'warning') return 'Integrity signal';
+    if (s === 'info') return 'Note';
+    if (s === 'ok') return 'Clear';
+    return severity || 'Clear';
+  }
+
+  function statusBadgeText(status) {
+    return severityDisplayLabel(status);
+  }
+
   function escapeHtml(str) {
     return String(str)
       .replace(/&/g, '&amp;')
@@ -71,36 +101,43 @@
       .replace(/"/g, '&quot;');
   }
 
-  function renderActiveFlags(flags) {
-    if (!els.activeFlagsList || !els.activeFlagsEmpty) return;
+  /** Live monitor: calm status + single top signal (no scrolling spam). */
+  function renderCurrentSignal(status, flags) {
+    var top = flags && flags[0] ? flags[0] : null;
+    var calm =
+      status === 'suspicious'
+        ? 'Hold still — an instructor can review this later'
+        : status === 'warning'
+          ? 'Brief attention drift noted'
+          : 'Eyes on the exam';
 
-    if (!flags || !flags.length) {
-      els.activeFlagsEmpty.hidden = false;
-      els.activeFlagsList.hidden = true;
-      els.activeFlagsList.innerHTML = '';
-      if (els.statusDetail) els.statusDetail.textContent = '';
+    if (els.statusDetail) els.statusDetail.textContent = calm;
+
+    if (!top) {
+      if (els.currentSignal) els.currentSignal.hidden = true;
       return;
     }
 
-    els.activeFlagsEmpty.hidden = true;
-    els.activeFlagsList.hidden = false;
-    els.activeFlagsList.innerHTML = flags.map(function (f) {
-      var conf = typeof f.confidence === 'number' ? Math.round(f.confidence * 100) + '%' : '—';
-      return (
-        '<li class="flag-row ' + escapeHtml(f.severity) + '">' +
-          '<span class="flag-label">' + escapeHtml(flagInstructorLabel(f.id)) + '</span>' +
-          '<span class="flag-severity ' + escapeHtml(f.severity) + '">' + escapeHtml(f.severity) + '</span>' +
-          '<span class="flag-id">' + escapeHtml(f.id) + ' · confidence ' + conf + '</span>' +
-          '<span class="flag-meta">' + escapeHtml(f.message || '') + '</span>' +
-        '</li>'
-      );
-    }).join('');
-
-    if (els.statusDetail) {
-      var top = flags[0];
-      els.statusDetail.textContent = top
-        ? ('Top signal: ' + flagInstructorLabel(top.id))
-        : '';
+    if (els.currentSignal) {
+      els.currentSignal.hidden = false;
+      els.currentSignal.setAttribute('data-severity', top.severity || status);
+    }
+    if (els.currentSignalSeverity) {
+      els.currentSignalSeverity.textContent = severityDisplayLabel(top.severity || status);
+    }
+    if (els.currentSignalTitle) {
+      els.currentSignalTitle.textContent = flagInstructorLabel(top.id);
+    }
+    if (els.currentSignalMsg) {
+      els.currentSignalMsg.textContent = top.message || '';
+    }
+    if (els.currentSignalId) {
+      var conf = typeof top.confidence === 'number'
+        ? Math.round(top.confidence * 100) + '%'
+        : null;
+      els.currentSignalId.textContent = conf
+        ? (top.id + ' · confidence ' + conf)
+        : String(top.id || '');
     }
   }
 
@@ -141,8 +178,238 @@
   function nextStep() { if (currentStep < STEPS.length - 1) showStep(currentStep + 1); }
   function prevStep() { if (currentStep > 0) showStep(currentStep - 1); }
 
+  function clearDetectorTransientState() {
+    if (!detector || cameraPaused) return;
+    // Drop in-flight dwell so a hidden tab doesn't become face_not_visible
+    if (typeof detector.pause === 'function' && typeof detector.resume === 'function') {
+      detector.pause();
+      detector.resume();
+    }
+  }
+
+  function logSoftTabBlur(durationMs) {
+    if (!detector || cameraPaused) return;
+
+    var secs = Math.max(1, Math.round(durationMs / 1000));
+    var flag = {
+      id: 'tab_blur',
+      severity: 'info',
+      confidence: 0.5,
+      startedAt: new Date().toISOString(),
+      message: 'Left the exam tab for about ' + secs + 's — noted for review, not scored',
+      meta: {
+        duration_ms: durationMs,
+        reason: 'visibilitychange'
+      }
+    };
+
+    detector.logEvent('info', [flag.message], [flag]);
+
+    if (typeof SideNoteAPI !== 'undefined') {
+      SideNoteAPI.recordEvent({
+        status: 'info',
+        messages: [flag.message],
+        flags: [flag],
+        flag_id: 'tab_blur',
+        severity: 'info',
+        confidence: flag.confidence
+      });
+    }
+
+    if (els.statusDetail && !cameraPaused) {
+      els.statusDetail.textContent =
+        'Note: left the exam tab (~' + secs + 's) — soft signal, not scored';
+    }
+
+    if (typeof console !== 'undefined' && console.log) {
+      console.log('[SideNote] Soft tab_blur note', { duration_ms: durationMs });
+    }
+  }
+
+  function onExamVisibilityChange() {
+    if (currentStep !== STEPS.indexOf('exam')) return;
+
+    if (document.hidden) {
+      tabHidden = true;
+      tabHideStartedAt = Date.now();
+      tabBlurLoggedForHide = false;
+      if (els.gazeDot) els.gazeDot.style.display = 'none';
+
+      if (tabBlurTimer) clearTimeout(tabBlurTimer);
+      tabBlurTimer = setTimeout(function () {
+        tabBlurTimer = null;
+        if (!document.hidden || tabBlurLoggedForHide || cameraPaused) return;
+        tabBlurLoggedForHide = true;
+        var dur = tabHideStartedAt ? (Date.now() - tabHideStartedAt) : TAB_BLUR_SOFT_MS;
+        logSoftTabBlur(dur);
+      }, TAB_BLUR_SOFT_MS);
+      return;
+    }
+
+    // Visible again
+    if (tabBlurTimer) {
+      clearTimeout(tabBlurTimer);
+      tabBlurTimer = null;
+    }
+    var wasHidden = tabHidden;
+    tabHidden = false;
+    tabHideStartedAt = null;
+    if (wasHidden) {
+      clearDetectorTransientState();
+      faceMissStreak = 0;
+      if (!cameraPaused && els.statusDetail && !tabBlurLoggedForHide) {
+        // Brief hide under soft threshold — no log, keep calm
+        els.statusDetail.textContent = 'Eyes on the exam';
+      }
+    }
+  }
+
+  function startTabBlurWatch() {
+    if (tabBlurWatching) return;
+    tabBlurWatching = true;
+    document.addEventListener('visibilitychange', onExamVisibilityChange);
+  }
+
+  function stopTabBlurWatch() {
+    if (!tabBlurWatching) return;
+    tabBlurWatching = false;
+    document.removeEventListener('visibilitychange', onExamVisibilityChange);
+    if (tabBlurTimer) {
+      clearTimeout(tabBlurTimer);
+      tabBlurTimer = null;
+    }
+    tabHidden = false;
+    tabHideStartedAt = null;
+    tabBlurLoggedForHide = false;
+  }
+
+  function setCameraPausedUI(paused, reason) {
+    cameraPaused = !!paused;
+
+    if (els.cameraPauseBanner) {
+      els.cameraPauseBanner.hidden = !paused;
+    }
+    if (els.cameraPauseMsg && reason) {
+      els.cameraPauseMsg.textContent = reason;
+    }
+    if (els.btnReconnectCamera) {
+      els.btnReconnectCamera.disabled = false;
+      els.btnReconnectCamera.textContent = 'Reconnect camera';
+    }
+
+    if (els.gazeDot) els.gazeDot.style.display = 'none';
+
+    if (!paused) {
+      if (els.statusBadge) {
+        els.statusBadge.classList.remove('is-paused');
+      }
+      return;
+    }
+
+    if (els.statusBadge) {
+      els.statusBadge.textContent = 'Paused';
+      els.statusBadge.style.background = '#8a7d6e';
+      els.statusBadge.setAttribute('data-status', 'paused');
+      els.statusBadge.setAttribute('title', 'Camera unavailable — integrity scoring paused');
+      els.statusBadge.classList.add('is-paused');
+    }
+    if (els.statusDetail) {
+      els.statusDetail.textContent = 'Scoring paused — reconnect the camera to continue';
+    }
+    if (els.currentSignal) els.currentSignal.hidden = true;
+  }
+
+  function onCameraAvailability(isLive) {
+    if (currentStep !== STEPS.indexOf('exam')) return;
+
+    if (!isLive) {
+      if (cameraPaused) return;
+      if (detector) detector.pause();
+      lastStatus = 'paused';
+      lastFlagKey = 'paused';
+      setCameraPausedUI(
+        true,
+        'Scoring is paused until the webcam is back. Allow camera access in the browser, then reconnect.'
+      );
+      if (typeof console !== 'undefined' && console.warn) {
+        console.warn('[SideNote] Camera lost — scoring paused');
+      }
+      return;
+    }
+
+    if (!cameraPaused) return;
+    resumeAfterCameraRestore();
+  }
+
+  function resumeAfterCameraRestore() {
+    if (detector) detector.resume();
+    setCameraPausedUI(false);
+    lastStatus = 'ok';
+    lastFlagKey = 'ok';
+    faceMissStreak = 0;
+    setProctorStatus({ status: 'ok', messages: [], color: '#7a9e6a', flags: [] });
+    if (typeof SideNoteGaze !== 'undefined') SideNoteGaze.resetSmoothing();
+    if (typeof console !== 'undefined' && console.log) {
+      console.log('[SideNote] Camera restored — scoring resumed');
+    }
+  }
+
+  function reconnectCamera() {
+    if (cameraReconnectBusy) return Promise.resolve();
+    if (!els.btnReconnectCamera) return Promise.resolve();
+
+    cameraReconnectBusy = true;
+    els.btnReconnectCamera.disabled = true;
+    els.btnReconnectCamera.textContent = 'Reconnecting…';
+
+    if (typeof SideNoteGaze === 'undefined') {
+      cameraReconnectBusy = false;
+      els.btnReconnectCamera.disabled = false;
+      els.btnReconnectCamera.textContent = 'Reconnect camera';
+      return Promise.resolve();
+    }
+
+    // Force a fresh begin() so the browser re-prompts if permission was revoked
+    try { SideNoteGaze.stop(); } catch (e) {}
+
+    return SideNoteGaze.start(onGaze)
+      .then(function () {
+        SideNoteGaze.styleWebGazerPreview();
+        return startVisionEngines();
+      })
+      .then(function () {
+        SideNoteGaze.watchCamera(onCameraAvailability);
+        if (SideNoteGaze.isCameraLive()) {
+          resumeAfterCameraRestore();
+        } else {
+          setCameraPausedUI(
+            true,
+            'Still no live camera. Check the browser address-bar camera permission, then try again.'
+          );
+        }
+      })
+      .catch(function (err) {
+        var msg = (err && err.message) ? err.message : 'Could not restart the camera.';
+        setCameraPausedUI(
+          true,
+          msg + ' Allow camera access, then try Reconnect again.'
+        );
+        if (typeof console !== 'undefined' && console.warn) {
+          console.warn('[SideNote] Camera reconnect failed', err);
+        }
+      })
+      .then(function () {
+        cameraReconnectBusy = false;
+        if (els.btnReconnectCamera) {
+          els.btnReconnectCamera.disabled = false;
+          els.btnReconnectCamera.textContent = 'Reconnect camera';
+        }
+      });
+  }
+
   function setProctorStatus(result) {
     if (!els.statusBadge) return;
+    if (cameraPaused) return;
 
     result = result || { status: 'ok', messages: [], color: '#7a9e6a', flags: [] };
     var status = result.status || 'ok';
@@ -154,19 +421,34 @@
     var topFlag = flags[0] || null;
     var flagKey = topFlag ? (topFlag.id + ':' + topFlag.severity) : status;
 
-    els.statusBadge.textContent = topFlag
-      ? (status.toUpperCase() + ' · ' + topFlag.id)
-      : status.toUpperCase();
+    els.statusBadge.textContent = statusBadgeText(status);
     els.statusBadge.style.background = color;
-    renderActiveFlags(flags);
+    els.statusBadge.setAttribute('data-status', status);
+    els.statusBadge.setAttribute(
+      'title',
+      status === 'suspicious'
+        ? 'Needs review — integrity signal for an instructor, not a cheating verdict'
+        : status === 'warning'
+          ? 'Integrity signal — brief or ambiguous attention drift'
+          : 'Clear — no active integrity signals'
+    );
+    renderCurrentSignal(status, flags);
 
     if (status !== lastStatus || flagKey !== lastFlagKey) {
       if (detector && status !== 'ok') {
         detector.logEvent(status, messages, flags);
       }
-      appendLiveLog({ status: status, messages: messages, flags: flags });
       if (typeof SideNoteAPI !== 'undefined' && status !== 'ok') {
-        SideNoteAPI.recordEvent(status, messages);
+        SideNoteAPI.recordEvent({
+          status: status,
+          messages: messages,
+          flags: flags,
+          flag_id: topFlag ? topFlag.id : null,
+          severity: topFlag ? topFlag.severity : status,
+          confidence: topFlag && typeof topFlag.confidence === 'number'
+            ? topFlag.confidence
+            : null
+        });
       }
       if (flags.length && typeof console !== 'undefined' && console.log) {
         console.log('[SideNote flags]', flags.map(function (f) {
@@ -180,7 +462,7 @@
           };
         }));
       }
-      // Suspicious + phone_risk → 2–3s JPEG burst from webcam
+      // Needs-review + phone_risk → 2–3s JPEG burst from webcam
       if (typeof SideNoteEvidence !== 'undefined' && SideNoteEvidence.needsCapture(status, flags)) {
         SideNoteEvidence.captureForFlags(status, flags).then(function (entries) {
           if (entries && entries.length && typeof console !== 'undefined' && console.log) {
@@ -193,22 +475,6 @@
       lastStatus = status;
       lastFlagKey = flagKey;
     }
-  }
-
-  function appendLiveLog(result) {
-    if (!els.eventLog || result.status === 'ok') return;
-    var top = (result.flags && result.flags[0]) || null;
-    var li = document.createElement('li');
-    li.className = result.status;
-    if (top) {
-      li.innerHTML =
-        new Date().toLocaleTimeString() +
-        ' — <span class="log-flag-id">' + escapeHtml(top.id) + '</span> · ' +
-        escapeHtml(flagInstructorLabel(top.id));
-    } else {
-      li.textContent = new Date().toLocaleTimeString() + ' — ' + (result.messages[0] || result.status);
-    }
-    els.eventLog.prepend(li);
   }
 
   /**
@@ -283,8 +549,9 @@
   }
 
   function startVisionEngines() {
-    return startFaceEngine().then(function () {
-      return startHandEngine();
+    // Parallel — each engine waits briefly for WebGazer's video element
+    return Promise.all([startFaceEngine(), startHandEngine()]).then(function () {
+      return true;
     });
   }
 
@@ -303,6 +570,11 @@
 
   function onGaze(sample) {
     if (!sample || currentStep !== STEPS.indexOf('exam')) return;
+    if (cameraPaused || tabHidden || document.hidden) return;
+    if (typeof SideNoteGaze !== 'undefined' && !SideNoteGaze.isCameraLive()) {
+      onCameraAvailability(false);
+      return;
+    }
 
     var faceVisible = readFaceVisible(900);
     if (faceVisible) faceMissStreak = 0;
@@ -322,6 +594,11 @@
 
   function tickExamMonitor() {
     if (currentStep !== STEPS.indexOf('exam') || !detector) return;
+    if (cameraPaused || tabHidden || document.hidden) return;
+    if (typeof SideNoteGaze !== 'undefined' && !SideNoteGaze.isCameraLive()) {
+      onCameraAvailability(false);
+      return;
+    }
 
     if (readFaceVisible(900)) {
       faceMissStreak = 0;
@@ -672,7 +949,19 @@
         msg = 'Average error: ' + Math.round(result.avgErrorPx) + ' px (must be ≤ ' + threshold + ' px). ';
         msg += result.pointsUnderThreshold + '/' + result.pointsMeasured + ' points on target. ';
         if (result.passed) {
-          msg += 'Passed — you can start the exam.';
+          if (hasStudentIdentity()) {
+            msg += 'Passed — you can start the exam.';
+          } else {
+            msg += 'Passed accuracy — enter your name or email below to unlock Start exam.';
+            if (els.studentIdentity) {
+              try { els.studentIdentity.focus(); } catch (e) {}
+            }
+            if (els.studentIdentityHint) {
+              els.studentIdentityHint.textContent =
+                'Accuracy passed. Enter your name or email to unlock Start exam.';
+              els.studentIdentityHint.className = 'identity-hint';
+            }
+          }
           setExamStartEnabled(true);
           out.className = 'validation-result pass';
         } else {
@@ -711,6 +1000,29 @@
     return report;
   }
 
+  function waitForCameraLive(timeoutMs) {
+    timeoutMs = timeoutMs || 5000;
+    return new Promise(function (resolve) {
+      if (typeof SideNoteGaze === 'undefined') {
+        resolve(false);
+        return;
+      }
+      var started = Date.now();
+      function tick() {
+        if (SideNoteGaze.isCameraLive && SideNoteGaze.isCameraLive()) {
+          resolve(true);
+          return;
+        }
+        if (Date.now() - started >= timeoutMs) {
+          resolve(false);
+          return;
+        }
+        setTimeout(tick, 200);
+      }
+      tick();
+    });
+  }
+
   function startExam() {
     if (!calibrationPassed()) {
       if (typeof console !== 'undefined' && console.warn) {
@@ -731,8 +1043,11 @@
     lastFlagKey = 'ok';
     examStartTime = Date.now();
     faceMissStreak = 0;
+    cameraPaused = false;
+    tabHidden = false;
+    tabBlurLoggedForHide = false;
     if (typeof SideNoteEvidence !== 'undefined') SideNoteEvidence.reset();
-    if (els.eventLog) els.eventLog.innerHTML = '';
+    setCameraPausedUI(false);
     setProctorStatus({ status: 'ok', messages: [], color: '#7a9e6a', flags: [] });
 
     if (typeof console !== 'undefined' && console.log) {
@@ -751,7 +1066,17 @@
     SideNoteGaze.start(onGaze).then(function () {
       SideNoteGaze.styleWebGazerPreview();
       return startVisionEngines();
+    }).then(function () {
+      // Wait for WebGazer video tracks before treating missing camera as a pause
+      return waitForCameraLive(5000);
+    }).then(function (live) {
+      SideNoteGaze.watchCamera(onCameraAvailability);
+      if (!live) {
+        onCameraAvailability(false);
+      }
     });
+
+    startTabBlurWatch();
 
     if (window._examTimerInterval) clearInterval(window._examTimerInterval);
     window._examTimerInterval = setInterval(function () {
@@ -769,11 +1094,15 @@
   function finishExam() {
     if (window._examTimerInterval) clearInterval(window._examTimerInterval);
     if (window._faceCheckInterval) clearInterval(window._faceCheckInterval);
+    if (typeof SideNoteGaze !== 'undefined') SideNoteGaze.unwatchCamera();
+    stopTabBlurWatch();
+    cameraPaused = false;
 
+    var online = typeof SideNoteAPI !== 'undefined' && SideNoteAPI.isOnline();
     var btn = $('btnFinishExam');
     if (btn) {
       btn.disabled = true;
-      btn.textContent = 'Saving…';
+      btn.textContent = online ? 'Saving…' : 'Finishing…';
     }
 
     var wait = typeof SideNoteEvidence !== 'undefined' && SideNoteEvidence.whenIdle
@@ -785,7 +1114,7 @@
       stopVisionEngines();
       if (els.gazeDot) els.gazeDot.style.display = 'none';
 
-      if (detector && typeof SideNoteAPI !== 'undefined' && SideNoteAPI.isOnline()) {
+      if (detector && online) {
         var report = buildFullReport();
         return SideNoteAPI.submitReport(report).then(function (saved) {
           if (saved && saved.id) serverSessionId = saved.id;
@@ -806,7 +1135,7 @@
     evidence = evidence || [];
     if (!evidence.length) {
       els.reportEvidence.innerHTML =
-        '<p class="evidence-empty">No snapshots captured this session. Suspicious and phone_risk events save webcam stills here.</p>';
+        '<p class="evidence-empty">No snapshots captured this session. Needs-review and phone_risk integrity signals save webcam stills here.</p>';
       return;
     }
 
@@ -880,6 +1209,64 @@
     document.addEventListener('keydown', onKey);
   }
 
+  function summarizeScoreDeductions(events) {
+    var phoneRisk = 0;
+    var otherNeedsReview = 0;
+    var integritySignals = 0;
+    var deducted = 0;
+
+    (events || []).forEach(function (e) {
+      var phoneSus = (e.flags || []).some(function (f) {
+        return f.id === 'phone_risk' && f.severity === 'suspicious';
+      });
+      if (phoneSus || e.status === 'suspicious') {
+        if (phoneSus) {
+          phoneRisk += 1;
+          deducted += 12;
+        } else {
+          otherNeedsReview += 1;
+          deducted += 8;
+        }
+      } else if (e.status === 'warning') {
+        integritySignals += 1;
+        deducted += 2;
+      }
+    });
+
+    return {
+      phoneRisk: phoneRisk,
+      otherNeedsReview: otherNeedsReview,
+      integritySignals: integritySignals,
+      deducted: deducted,
+      score: Math.max(0, 100 - deducted)
+    };
+  }
+
+  function renderScoreBreakdown(events, integrityScore) {
+    if (!els.scoreBreakdown) return;
+    var s = summarizeScoreDeductions(events);
+    var parts = [];
+    if (s.phoneRisk) {
+      parts.push(s.phoneRisk + '× phone_risk (−12)');
+    }
+    if (s.otherNeedsReview) {
+      parts.push(s.otherNeedsReview + '× needs review (−8)');
+    }
+    if (s.integritySignals) {
+      parts.push(s.integritySignals + '× integrity signal (−2)');
+    }
+
+    var finalScore = integrityScore != null ? integrityScore : s.score;
+    if (!parts.length) {
+      els.scoreBreakdown.textContent =
+        'This session: 100 − 0 = ' + finalScore + ' (no deductions).';
+      return;
+    }
+
+    els.scoreBreakdown.textContent =
+      'This session: 100 − (' + parts.join(' + ') + ') = ' + finalScore + '.';
+  }
+
   function renderReport() {
     var report = buildFullReport();
     if (els.integrityScore) els.integrityScore.textContent = report.integrityScore;
@@ -898,17 +1285,18 @@
             ? 'Lighting · Distance · Fullscreen confirmed'
             : 'Not fully confirmed') +
         '</p>' +
-        '<p><strong>Integrity score:</strong> ' + report.integrityScore + '/100</p>' +
-        '<p><strong>Warnings:</strong> ' + report.warningCount + ' · <strong>Flags:</strong> ' + report.suspiciousCount + '</p>' +
+        '<p><strong>Integrity signals:</strong> ' + report.warningCount +
+          ' · <strong>Needs review:</strong> ' + report.suspiciousCount + '</p>' +
         '<p><strong>Evidence snapshots:</strong> ' +
           (report.evidence ? report.evidence.length : 0) +
           ' / ' +
           (typeof SideNoteEvidence !== 'undefined' ? SideNoteEvidence.MAX_ITEMS : 8) +
           ' max</p>' +
-        (typeof SideNoteAPI !== 'undefined' && SideNoteAPI.isOnline()
-          ? '<p class="ok-msg" style="color:var(--ok)">Report saved — you\'re all set.</p>'
-          : '<p style="color:var(--muted)">Session saved locally — download the JSON to keep a copy.</p>');
+        (typeof SideNoteAPI !== 'undefined' && SideNoteAPI.isOnline() && (serverSessionId || SideNoteAPI.getSessionId())
+          ? '<p class="ok-msg" style="color:var(--ok)">Report saved on the server.</p>'
+          : '<p class="report-offline-note"><strong>Session not saved</strong> — backend was offline. Download the JSON report to keep a local copy.</p>');
     }
+    renderScoreBreakdown(report.events, report.integrityScore);
     renderEvidence(report.evidence);
     if (els.reportEvents) {
       els.reportEvents.innerHTML = report.events.length
@@ -916,12 +1304,12 @@
             var top = (e.flags && e.flags[0]) || null;
             var detail = top
               ? ('<span class="log-flag-id">' + escapeHtml(top.id) + '</span> [' +
-                 escapeHtml(top.severity) + '] — ' +
+                 escapeHtml(severityDisplayLabel(top.severity)) + '] — ' +
                  escapeHtml(flagInstructorLabel(top.id)))
               : escapeHtml(e.messages.join('; '));
             return '<li class="' + e.status + '">' + e.time + ' — ' + detail + '</li>';
           }).join('')
-        : '<li class="ok-msg">No incidents recorded — great job.</li>';
+        : '<li class="ok-msg">No integrity signals recorded — clear session.</li>';
     }
   }
 
@@ -1002,6 +1390,18 @@
       els.studentIdentity.addEventListener('input', function () {
         validateStudentIdentity(false);
         refreshExamStartGate();
+        var out = $('validationResult');
+        if (
+          out &&
+          calibrationPassed() &&
+          hasStudentIdentity() &&
+          /enter your name or email/i.test(out.textContent || '')
+        ) {
+          out.textContent = (out.textContent || '').replace(
+            /Passed accuracy — enter your name or email below to unlock Start exam\./i,
+            'Passed — you can start the exam.'
+          );
+        }
       });
       els.studentIdentity.addEventListener('change', function () {
         validateStudentIdentity(false);
@@ -1009,16 +1409,24 @@
       });
     }
     $('btnFinishExam').addEventListener('click', finishExam);
+    if (els.btnReconnectCamera) {
+      els.btnReconnectCamera.addEventListener('click', function () {
+        reconnectCamera();
+      });
+    }
     $('btnDownloadReport').addEventListener('click', downloadReport);
     $('btnRestart').addEventListener('click', function () {
+      if (typeof SideNoteGaze !== 'undefined') SideNoteGaze.unwatchCamera();
       SideNoteGaze.stop();
       stopVisionEngines();
+      stopTabBlurWatch();
       if (typeof SideNoteAPI !== 'undefined') SideNoteAPI.resetSession();
       detector = null;
       serverSessionId = null;
       lastCalibration = null;
       lastStatus = 'ok';
       lastFlagKey = 'ok';
+      cameraPaused = false;
       studentIdentity = '';
       if (els.studentIdentity) {
         els.studentIdentity.value = '';
@@ -1043,19 +1451,26 @@
   function initLibraryStatus() {
     var el = $('libraryStatus');
     var apiEl = $('apiStatus');
+    var offlineBanner = $('offlineBanner');
 
     function showWebGazer(src) {
       el.textContent = 'Camera tracking is ready (' + src + '). Chrome or Edge works best.';
       el.className = 'lib-status ok';
     }
 
+    function setOfflineBanner(show) {
+      if (!offlineBanner) return;
+      offlineBanner.hidden = !show;
+    }
+
     function showBackendStatus(online) {
+      setOfflineBanner(!online);
       if (!apiEl) return;
       if (online) {
-        apiEl.textContent = 'Connected — your session will be saved automatically.';
+        apiEl.textContent = 'Server connected — your session will be saved automatically.';
         apiEl.className = 'lib-status ok';
       } else {
-        apiEl.textContent = 'Not connected yet — start the server with: python run_server.py';
+        apiEl.textContent = 'Offline — session not saved. The demo still works in your browser (download JSON later).';
         apiEl.className = 'lib-status warn';
       }
     }
@@ -1067,8 +1482,14 @@
       el.className = 'lib-status err';
     });
 
-    if (typeof SideNoteAPI !== 'undefined' && apiEl) {
+    if (typeof SideNoteAPI !== 'undefined') {
       SideNoteAPI.startHealthMonitor(showBackendStatus);
+    } else {
+      setOfflineBanner(true);
+      if (apiEl) {
+        apiEl.textContent = 'Offline — session not saved. The demo still works in your browser.';
+        apiEl.className = 'lib-status warn';
+      }
     }
   }
 

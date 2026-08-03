@@ -7,7 +7,10 @@
  * Primary heuristic (hands_in_lap):
  *   wrist Y relative to Face Mesh chin — wrist below chin (+ face-scaled margin).
  * Fallback when face landmarks missing:
- *   absolute wrist Y > 0.55 (same idea as main.py LAP_ZONE_Y).
+ *   absolute wrist Y > ABS_LAP_ENTER_Y (hysteresis to ABS_LAP_EXIT_Y).
+ *
+ * FROZEN (week2_tune, 2026-08-03): do not tweak wrist cutoffs without a new
+ * labeled eval — see docs/THRESHOLD_NOTES.md.
  *
  * API: window.SideNoteHands
  *   .waitForReady() → Promise
@@ -24,12 +27,14 @@
   var WRIST_IDX = 0;
   var CHIN_IDX = 152;
   var FOREHEAD_IDX = 10;
-  var ABS_LAP_ENTER_Y = 0.55;
-  var ABS_LAP_EXIT_Y = 0.48;
+  // --- FROZEN week2_tune — see docs/THRESHOLD_NOTES.md ---
+  var ABS_LAP_ENTER_Y = 0.58;
+  var ABS_LAP_EXIT_Y = 0.50;
   /** Enter lap when wrist is this fraction of face-height below chin */
-  var REL_ENTER_FACE_FRAC = 0.18;
+  var REL_ENTER_FACE_FRAC = 0.22;
   /** Exit lap when wrist rises above chin + this fraction of face-height */
-  var REL_EXIT_FACE_FRAC = 0.06;
+  var REL_EXIT_FACE_FRAC = 0.10;
+  // --- end freeze ---
   var HANDS_STALE_MS = 400;
 
   var state = {
@@ -58,11 +63,36 @@
 
   function findVideoElement(preferred) {
     if (preferred && preferred.tagName === 'VIDEO') return preferred;
+    if (global.SideNoteGaze && typeof global.SideNoteGaze.getVideoElement === 'function') {
+      var fromGaze = global.SideNoteGaze.getVideoElement();
+      if (fromGaze) return fromGaze;
+    }
     return (
       document.getElementById('webgazerVideoFeed') ||
       document.querySelector('#webgazerVideoContainer video') ||
       document.querySelector('video')
     );
+  }
+
+  /** WebGazer mounts video asynchronously after begin() — wait briefly. */
+  function waitForVideoElement(preferred, timeoutMs) {
+    timeoutMs = timeoutMs || 8000;
+    return new Promise(function (resolve, reject) {
+      var started = Date.now();
+      function tick() {
+        var video = findVideoElement(preferred);
+        if (video) {
+          resolve(video);
+          return;
+        }
+        if (Date.now() - started >= timeoutMs) {
+          reject(new Error('No video element found for Hands'));
+          return;
+        }
+        global.setTimeout(tick, 200);
+      }
+      tick();
+    });
   }
 
   /**
@@ -240,11 +270,8 @@
 
   function start(videoEl) {
     return waitForReady().then(function () {
-      var video = findVideoElement(videoEl);
-      if (!video) {
-        return Promise.reject(new Error('No video element found for Hands'));
-      }
-
+      return waitForVideoElement(videoEl, 8000);
+    }).then(function (video) {
       state.video = video;
       state.active = true;
       state.lastSendMs = 0;

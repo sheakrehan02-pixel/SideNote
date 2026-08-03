@@ -6,11 +6,13 @@ Canonical definitions for integrity signals. Use these `flag_id` values in detec
 
 **Severity ladder**
 
-| Severity | Meaning | Typical instructor action |
-|----------|---------|---------------------------|
-| `info` | Context only; not scored harshly | Ignore unless pattern emerges |
-| `warning` | Brief / ambiguous anomaly | Glance at timestamp |
-| `suspicious` | Sustained or high-risk pattern | Open evidence and decide |
+| Severity | Meaning | Typical instructor action | UI label |
+|----------|---------|---------------------------|----------|
+| `info` | Context only; not scored harshly | Ignore unless pattern emerges | Note |
+| `warning` | Brief / ambiguous anomaly | Glance at timestamp | **Integrity signal** |
+| `suspicious` | Sustained or high-risk pattern | Open evidence and decide | **Needs review** |
+
+Never label a student “cheating” in product copy. Flags are **signals for human review**, not verdicts.
 
 When the same behavior escalates over time, emit **one** `flag_id` that upgrades severity (do not invent parallel IDs like `looking_down_warn` / `looking_down_sus`).
 
@@ -26,7 +28,7 @@ When the same behavior escalates over time, emit **one** `flag_id` that upgrades
 | **Student message (warning)** | Glanced toward the bottom of the screen |
 | **Student message (suspicious)** | Looking down for a while — phone or notes nearby? |
 | **Severity** | `warning` after brief sustained look; `suspicious` after longer sustained look |
-| **Trigger** | Gaze Y (viewport-normalized) enters the bottom zone and stays there. Web defaults: enter `y > 0.82`, exit `y < 0.74` (hysteresis). Escalate using frame windows (~10 warning / ~20 suspicious at demo FPS). |
+| **Trigger** | Gaze Y (viewport-normalized) enters the bottom zone and stays there. Web defaults: enter `y > 0.88`, exit `y < 0.80` (hysteresis). Gaze-only suspicious uses a longer dwell (~26 frames); `phone_risk` co-occurrence escalates sooner (~18). |
 | **Signals** | WebGazer screen gaze (primary). Optional: head pitch down from Face Mesh as supporting confidence. |
 | **Evidence required** | **Yes** at `suspicious`: ≥1 webcam frame (prefer 2–3s burst) + timestamp + gaze `(x,y)` sample. Warning: timestamp + reason only is enough. |
 | **Confidence notes** | Lower if calibration failed or avg error is high. Do not emit `suspicious` if calibration `passed === false`. |
@@ -42,7 +44,7 @@ When the same behavior escalates over time, emit **one** `flag_id` that upgrades
 | **Student message (warning)** | Glanced toward the edge of the screen |
 | **Student message (suspicious)** | Gaze off to the side for a while — second screen or device? |
 | **Severity** | `warning` → `suspicious` with duration |
-| **Trigger** | Gaze X near left/right viewport edges. Web defaults: enter `x < 0.03` or `x > 0.97`, exit inside `0.06…0.94`. Same frame windows as `looking_down`. |
+| **Trigger** | Gaze X near left/right viewport edges. Web defaults: enter `x < 0.025` or `x > 0.975`, exit inside `0.08…0.92`. Warning ~12 frames / suspicious ~22. |
 | **Signals** | WebGazer screen gaze |
 | **Evidence required** | **Yes** at `suspicious`: frame(s) + timestamp + gaze sample. Warning: log only. |
 | **Confidence notes** | Easy false positive if calibration drifts or student sits off-center. Prefer longer duration before `suspicious`. |
@@ -113,6 +115,24 @@ When the same behavior escalates over time, emit **one** `flag_id` that upgrades
 
 ---
 
+### `tab_blur`
+
+| Field | Value |
+|-------|--------|
+| **Instructor label** | Left exam tab |
+| **Student message (info)** | Left the exam tab briefly — noted for review, not scored |
+| **Severity** | `info` only (never warning/suspicious from tab alone) |
+| **Trigger** | `document.visibilityState === 'hidden'` for ≥ ~1.5s during the exam. One note per hide episode. |
+| **Signals** | Page Visibility API (`visibilitychange`) |
+| **Evidence required** | No |
+| **Confidence notes** | Notifications, OS overlays, and accidental clicks also hide the tab — treat as context only. |
+| **Score impact** | **0** (do not over-punish) |
+| **Status** | Implemented (web demo) |
+
+While the tab is hidden, gaze/face scoring is **paused** so a blank camera does not escalate to `face_not_visible`.
+
+---
+
 ## Severity & scoring policy (v1)
 
 Use one score formula everywhere (client report + server recompute):
@@ -133,6 +153,7 @@ Floor score at `0`. Do not treat raw score as a pass/fail grade without an instr
 3. `face_not_visible`
 4. `hands_in_lap`
 5. `multiple_faces`
+6. `tab_blur` (info — never tops a warning/suspicious signal)
 
 ---
 
@@ -206,13 +227,14 @@ Failed calibration → block exam start (Day 6). If an exam somehow submits anyw
 | `hand_in_lap` | `hands_in_lap` (`meta.hand_count: 1`) |
 | `both_hands_lap` | `hands_in_lap` (`meta.hand_count: 2`) |
 | `phone_risk` | `phone_risk` |
+| `tab_blur` | `tab_blur` |
 
 ---
 
 ## Out of scope for v1 (do not invent flags yet)
 
 - Audio / talking detection  
-- Tab-switch / copy-paste as primary cheating proof (optional soft `info` later)  
+- Tab-switch / copy-paste as **primary** cheating proof (soft `tab_blur` info is allowed; do not escalate to suspicious)  
 - Eyewear / identity mismatch  
 - “Definitely cheating” or legal verdict labels  
 

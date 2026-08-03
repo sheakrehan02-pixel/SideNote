@@ -99,7 +99,15 @@ def create_app() -> FastAPI:
         if body.status == "ok":
             return JSONResponse({"ok": True, "skipped": True})
         try:
-            event = db.add_event(session_id, body.status, body.messages)
+            event = db.add_event(
+                session_id,
+                body.status,
+                body.messages,
+                flag_id=body.flag_id,
+                severity=body.severity,
+                confidence=body.confidence,
+                evidence_path=body.evidence_path,
+            )
             return JSONResponse(event)
         except KeyError:
             raise HTTPException(status_code=404, detail="Session not found")

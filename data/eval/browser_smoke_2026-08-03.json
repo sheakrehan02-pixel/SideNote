@@ -1,0 +1,80 @@
+{
+  "at": "2026-08-03T14:12:07.595Z",
+  "base": "http://127.0.0.1:8000",
+  "results": [
+    {
+      "browser": "Chromium (Chrome engine)",
+      "ok": true,
+      "checks": {
+        "healthStatus": 200,
+        "healthBody": {
+          "status": "ok",
+          "service": "Side Note API",
+          "version": "1.0.0"
+        },
+        "demoStatus": 200,
+        "title": "Side Note — Proctoring Demo",
+        "hasStartCamera": 1,
+        "hasOfflineBanner": 1,
+        "hasApiStatus": 1,
+        "hasLibraryStatus": 1,
+        "globals": {
+          "webgazer": "object",
+          "begin": true,
+          "SideNoteGaze": "object",
+          "SideNoteAPI": "object",
+          "SideNoteCheatingDetector": "function",
+          "webgazerSource": "local",
+          "faceMeshSource": "cdn"
+        },
+        "libraryStatusText": "Camera tracking is ready (local). Chrome or Edge works best.",
+        "apiStatusText": "Server connected — your session will be saved automatically.",
+        "offlineBannerHidden": true,
+        "indexStatus": 200,
+        "indexHasTagline": 1,
+        "sessionsStatus": 200,
+        "sessionsStatusText": "3 session(s) found"
+      },
+      "errors": [],
+      "consoleErrors": [],
+      "notes": []
+    },
+    {
+      "browser": "WebKit (Safari engine)",
+      "ok": true,
+      "checks": {
+        "healthStatus": 200,
+        "healthBody": {
+          "status": "ok",
+          "service": "Side Note API",
+          "version": "1.0.0"
+        },
+        "demoStatus": 200,
+        "title": "Side Note — Proctoring Demo",
+        "hasStartCamera": 1,
+        "hasOfflineBanner": 1,
+        "hasApiStatus": 1,
+        "hasLibraryStatus": 1,
+        "globals": {
+          "webgazer": "object",
+          "begin": true,
+          "SideNoteGaze": "object",
+          "SideNoteAPI": "object",
+          "SideNoteCheatingDetector": "function",
+          "webgazerSource": "local",
+          "faceMeshSource": "cdn"
+        },
+        "libraryStatusText": "Camera tracking is ready (local). Chrome or Edge works best.",
+        "apiStatusText": "Server connected — your session will be saved automatically.",
+        "offlineBannerHidden": true,
+        "indexStatus": 200,
+        "indexHasTagline": 1,
+        "sessionsStatus": 200,
+        "sessionsStatusText": "3 session(s) found"
+      },
+      "errors": [],
+      "consoleErrors": [],
+      "notes": []
+    }
+  ]
+}

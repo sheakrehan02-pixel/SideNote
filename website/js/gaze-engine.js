@@ -151,6 +151,151 @@
     });
   }
 
+  function getVideoElement() {
+    return (
+      document.getElementById('webgazerVideoFeed') ||
+      document.querySelector('#webgazerVideoContainer video') ||
+      document.querySelector('video#webgazerVideoFeed') ||
+      null
+    );
+  }
+
+  /** True when WebGazer's video has at least one live, enabled track. */
+  function isCameraLive() {
+    var video = getVideoElement();
+    if (!video) return false;
+    var stream = video.srcObject;
+    if (!stream || typeof stream.getVideoTracks !== 'function') {
+      // Fallback: video element still playing frames
+      return !!(video.readyState >= 2 && !video.paused && video.videoWidth > 0);
+    }
+    var tracks = stream.getVideoTracks();
+    if (!tracks.length) return false;
+    for (var i = 0; i < tracks.length; i++) {
+      var t = tracks[i];
+      // ended / permanently muted = unavailable; ignore transient mute flicker by
+      // requiring readyState !== 'live' or enabled === false as the hard fail.
+      if (t && t.readyState === 'live' && t.enabled !== false) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  var cameraWatch = {
+    pollId: null,
+    tracks: [],
+    handlers: [],
+    onChange: null,
+    lastLive: null,
+    permStatus: null
+  };
+
+  function detachTrackHandlers() {
+    cameraWatch.handlers.forEach(function (h) {
+      try {
+        h.track.removeEventListener('ended', h.onEnded);
+        h.track.removeEventListener('mute', h.onMute);
+        h.track.removeEventListener('unmute', h.onUnmute);
+      } catch (e) {}
+    });
+    cameraWatch.handlers = [];
+    cameraWatch.tracks = [];
+  }
+
+  function attachTrackHandlers(stream) {
+    detachTrackHandlers();
+    if (!stream || typeof stream.getVideoTracks !== 'function') return;
+    stream.getVideoTracks().forEach(function (track) {
+      var onEnded = function () { emitCameraChange(); };
+      var onMute = function () { emitCameraChange(); };
+      var onUnmute = function () { emitCameraChange(); };
+      track.addEventListener('ended', onEnded);
+      track.addEventListener('mute', onMute);
+      track.addEventListener('unmute', onUnmute);
+      cameraWatch.handlers.push({ track: track, onEnded: onEnded, onMute: onMute, onUnmute: onUnmute });
+      cameraWatch.tracks.push(track);
+    });
+  }
+
+  function emitCameraChange() {
+    if (!cameraWatch.onChange) return;
+    var live = isCameraLive();
+    // Grace: while gaze is active but video not mounted yet, don't flip to "lost"
+    if (!live && state.active && cameraWatch.lastLive !== true) {
+      var video = getVideoElement();
+      if (!video) return;
+    }
+    if (cameraWatch.lastLive === live) return;
+    cameraWatch.lastLive = live;
+    try {
+      cameraWatch.onChange(live);
+    } catch (e) {}
+  }
+
+  /**
+   * Watch WebGazer camera health. Calls onChange(isLive) when availability flips.
+   * Covers track ended, mute, permission revoke, and a light poll backup.
+   */
+  function watchCamera(onChange) {
+    unwatchCamera();
+    cameraWatch.onChange = typeof onChange === 'function' ? onChange : null;
+    cameraWatch.lastLive = null;
+
+    var video = getVideoElement();
+    if (video && video.srcObject) {
+      attachTrackHandlers(video.srcObject);
+    }
+
+    cameraWatch.pollId = global.setInterval(function () {
+      var v = getVideoElement();
+      if (v && v.srcObject && cameraWatch.tracks.indexOf((v.srcObject.getVideoTracks() || [])[0]) < 0) {
+        attachTrackHandlers(v.srcObject);
+      }
+      emitCameraChange();
+    }, 1000);
+
+    if (global.navigator && global.navigator.permissions && typeof global.navigator.permissions.query === 'function') {
+      try {
+        global.navigator.permissions.query({ name: 'camera' }).then(function (status) {
+          cameraWatch.permStatus = status;
+          var onPerm = function () {
+            if (status.state === 'denied') {
+              if (cameraWatch.lastLive !== false) {
+                cameraWatch.lastLive = false;
+                if (cameraWatch.onChange) cameraWatch.onChange(false);
+              }
+            } else {
+              emitCameraChange();
+            }
+          };
+          status.addEventListener('change', onPerm);
+          cameraWatch.permOnChange = onPerm;
+          onPerm();
+        }).catch(function () {});
+      } catch (e) {}
+    }
+
+    emitCameraChange();
+  }
+
+  function unwatchCamera() {
+    if (cameraWatch.pollId != null) {
+      global.clearInterval(cameraWatch.pollId);
+      cameraWatch.pollId = null;
+    }
+    detachTrackHandlers();
+    if (cameraWatch.permStatus && cameraWatch.permOnChange) {
+      try {
+        cameraWatch.permStatus.removeEventListener('change', cameraWatch.permOnChange);
+      } catch (e) {}
+    }
+    cameraWatch.permStatus = null;
+    cameraWatch.permOnChange = null;
+    cameraWatch.onChange = null;
+    cameraWatch.lastLive = null;
+  }
+
   function setWebGazerDebug(show) {
     if (!hasWebGazer()) return;
     var wg = global.webgazer;
@@ -375,6 +520,7 @@
     resetSmoothing();
     state.latestGaze = null;
     state.lastFaceTime = 0;
+    unwatchCamera();
   }
 
   function waitMs(ms) {
@@ -659,6 +805,10 @@
     smoothGaze: smoothGaze,
     resetSmoothing: resetSmoothing,
     styleWebGazerPreview: styleWebGazerPreview,
+    getVideoElement: getVideoElement,
+    isCameraLive: isCameraLive,
+    watchCamera: watchCamera,
+    unwatchCamera: unwatchCamera,
     isFaceVisible: isFaceVisible,
     isActive: function () { return state.active; },
     getTrainingPointCount: function () { return state.trainingPoints; }

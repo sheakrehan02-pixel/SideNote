@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Side Note — Eye tracking + cheating detection for online exams.
-Uses gaze direction, hand position, and face position to flag suspicious behavior.
+Side Note — Eye tracking + integrity signals for online exams.
+Uses gaze, hand position, and face presence to surface signals for human review.
 """
 
 import cv2
@@ -131,10 +131,10 @@ class HandDetector:
 
 class CheatingDetector:
     """
-    Flags suspicious behavior:
-    - Looking down (gaze) → likely phone/notes in lap
-    - Hands in lap zone while looking down → high suspicion
-    - Gaze off-screen (left/right) for long → second device
+    Emits integrity signals for review (not cheating verdicts):
+    - Looking down (gaze) → possible phone/notes in lap
+    - Hands in lap zone while looking down → higher-priority signal
+    - Gaze off-screen (left/right) for long → possible second device
     - No face detected → person left or turned away
     """
 
@@ -207,10 +207,20 @@ class CheatingDetector:
         return "ok", [], (0, 255, 0)
 
 
+def _status_display_label(status):
+    """UI labels — never show raw SUSPICIOUS / CHEATING on the overlay."""
+    return {
+        "suspicious": "Needs review",
+        "warning": "Integrity signal",
+        "info": "Note",
+        "ok": "Clear",
+    }.get(status, status)
+
+
 def main():
-    print("Side Note — Eye tracking + cheating detection")
+    print("Side Note — integrity signals (review, not verdicts)")
     print("Press 'q' to quit")
-    print("Rules: looking down = lap/phone risk; hands in lap = suspicious; gaze off-screen = second device")
+    print("Rules: looking down = lap/phone risk; hands in lap = signal; gaze off-screen = second device")
 
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
@@ -246,7 +256,7 @@ def main():
             cv2.rectangle(frame, (0, 0), (w, panel_h), (40, 40, 50), -1)
             cv2.rectangle(frame, (0, 0), (w, panel_h), (60, 60, 70), 1)
 
-            status_text = f"Status: {status.upper()}"
+            status_text = f"Status: {_status_display_label(status)}"
             cv2.putText(frame, status_text, (12, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
             if reasons:
                 for i, r in enumerate(reasons[:3]):
@@ -259,7 +269,7 @@ def main():
             cv2.line(frame, (0, lap_y), (w, lap_y), (80, 80, 80), 1)
             cv2.putText(frame, "lap zone below", (w - 140, lap_y - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (100, 100, 100), 1)
 
-            cv2.imshow("Side Note — Cheating Detection", frame)
+            cv2.imshow("Side Note — Integrity signals", frame)
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 break
     except KeyboardInterrupt:

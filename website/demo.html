@@ -48,6 +48,10 @@
   </script>
 </head>
 <body>
+  <div id="offlineBanner" class="offline-banner" hidden role="status" aria-live="polite">
+    <strong>Session not saved</strong>
+    <span>— demo still works offline. Download JSON on the report page to keep a copy.</span>
+  </div>
   <div class="app-shell" id="wizard">
     <header class="top-bar">
       <h1>
@@ -186,14 +190,19 @@
         <aside class="proctor-panel">
           <h4>Integrity monitor</h4>
           <div class="exam-meta">Time: <span id="examTimer">00:00</span></div>
-          <div class="status-badge" id="statusBadge" style="background:#7a9e6a">OK</div>
-          <div class="active-flags" id="activeFlags">
-            <p class="ok-msg" id="activeFlagsEmpty">No active signals — eyes on the exam</p>
-            <ul id="activeFlagsList" hidden></ul>
+          <div class="status-badge" id="statusBadge" style="background:#7a9e6a" title="Clear — no active integrity signals">Clear</div>
+          <p class="status-detail" id="statusDetail">Eyes on the exam</p>
+          <div class="camera-pause-banner" id="cameraPauseBanner" hidden>
+            <p class="camera-pause-title">Camera unavailable</p>
+            <p class="camera-pause-msg" id="cameraPauseMsg">Scoring is paused until the webcam is back. Allow camera access in the browser, then reconnect.</p>
+            <button type="button" class="btn btn-secondary" id="btnReconnectCamera">Reconnect camera</button>
           </div>
-          <p class="status-detail" id="statusDetail"></p>
-          <h4>Live log</h4>
-          <ul id="eventLog"></ul>
+          <div class="current-signal" id="currentSignal" hidden>
+            <p class="current-signal-eyebrow" id="currentSignalSeverity">Integrity signal</p>
+            <p class="current-signal-title" id="currentSignalTitle"></p>
+            <p class="current-signal-msg" id="currentSignalMsg"></p>
+            <p class="current-signal-id" id="currentSignalId"></p>
+          </div>
           <label class="toggle-row">
             <input type="checkbox" id="toggleGazeDot" checked>
             Show where I'm looking
@@ -204,6 +213,7 @@
             <p><span class="zone-flag"></span> <strong>gaze_off_screen</strong> — side / second screen</p>
             <p><span class="zone-warn"></span> <strong>hands_in_lap</strong> — wrists below chin</p>
             <p><span class="zone-flag"></span> <strong>face_not_visible</strong> — left frame / covered</p>
+            <p><span class="zone-info"></span> <strong>tab_blur</strong> — left tab (soft note, not scored)</p>
           </div>
           <div class="btn-row" style="margin-top:16px">
             <button type="button" class="btn btn-danger" id="btnFinishExam">Submit exam</button>
@@ -214,13 +224,36 @@
 
     <section class="panel" data-step-panel hidden>
       <h2>Session report</h2>
-      <p>Integrity score (demo heuristic — not a legal proctoring verdict):</p>
+      <p class="report-lede">Integrity score from this session’s logged signals.</p>
       <div class="score-ring"><span id="integrityScore">100</span>/100</div>
       <div id="reportSummary"></div>
+
+      <section class="score-explain" aria-labelledby="scoreExplainTitle">
+        <h3 id="scoreExplainTitle">How this was calculated</h3>
+        <p class="score-explain-lead">
+          Every session starts at <strong>100</strong>. Each logged integrity event subtracts a fixed weight
+          (server may recompute the same rules). Floor is <strong>0</strong>.
+        </p>
+        <ul class="score-weights">
+          <li><span class="weight-label">Needs review · <code>phone_risk</code></span> <span class="weight-val">−12</span></li>
+          <li><span class="weight-label">Needs review · other flags</span> <span class="weight-val">−8</span></li>
+          <li><span class="weight-label">Integrity signal (warning)</span> <span class="weight-val">−2</span></li>
+          <li><span class="weight-label">Note · <code>tab_blur</code> / info</span> <span class="weight-val">−0</span></li>
+        </ul>
+        <p class="score-breakdown" id="scoreBreakdown">This session: 100 (no deductions).</p>
+      </section>
+
+      <aside class="report-disclaimer" role="note">
+        <p><strong>Disclaimer.</strong> This score is a demo heuristic for soft proctoring research —
+          not a cheating verdict, academic misconduct finding, or legal determination.
+          Gaze and hand signals can misread posture, lighting, glasses, or calibration drift.
+          An instructor should review named signals and evidence before taking any action.</p>
+      </aside>
+
       <h3 style="margin-top:20px;font-size:1rem">Evidence snapshots</h3>
-      <p class="evidence-hint">Webcam stills from suspicious / phone_risk signals — click a thumbnail to enlarge.</p>
+      <p class="evidence-hint">Webcam stills from needs-review / phone_risk integrity signals — click a thumbnail to enlarge.</p>
       <div id="reportEvidence" class="evidence-grid" aria-live="polite"></div>
-      <h3 style="margin-top:20px;font-size:1rem">Incident log</h3>
+      <h3 style="margin-top:20px;font-size:1rem">Integrity signal log</h3>
       <ul id="reportEvents"></ul>
       <div class="btn-row">
         <button type="button" class="btn btn-secondary" id="btnDownloadReport">Download JSON report</button>

@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Side Note — Session detail</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Lora:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/demo.css">
+  <link rel="stylesheet" href="css/session.css">
+</head>
+<body>
+  <div class="app-shell session-shell">
+    <header class="top-bar">
+      <h1>
+        <img src="logo.svg" alt="" width="28" height="28">
+        Side Note — Session
+      </h1>
+      <nav class="session-nav">
+        <a href="sessions.html">← All sessions</a>
+        <a href="demo.html">Demo</a>
+      </nav>
+    </header>
+
+    <div id="loadStatus" class="lib-status">Loading session…</div>
+
+    <section class="panel session-hero" id="sessionHero" hidden>
+      <div class="session-hero-main">
+        <p class="session-eyebrow" id="sessionStudent">Student</p>
+        <h2 id="sessionTitle">Exam session</h2>
+        <p class="session-meta" id="sessionMeta"></p>
+      </div>
+      <div class="score-ring-wrap" id="scoreRingWrap">
+        <div class="score-ring" id="scoreRing" data-tone="ok">
+          <span class="score-value" id="scoreValue">—</span>
+          <span class="score-label">Integrity</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel score-explain" id="scoreExplainPanel" hidden aria-labelledby="sessionScoreExplainTitle">
+      <h3 id="sessionScoreExplainTitle">How this was calculated</h3>
+      <p class="score-explain-lead">
+        Starts at <strong>100</strong>. Each logged integrity event subtracts a fixed weight. Floor is <strong>0</strong>.
+      </p>
+      <ul class="score-weights">
+        <li><span class="weight-label">Needs review · <code>phone_risk</code></span> <span class="weight-val">−12</span></li>
+        <li><span class="weight-label">Needs review · other flags</span> <span class="weight-val">−8</span></li>
+        <li><span class="weight-label">Integrity signal (warning)</span> <span class="weight-val">−2</span></li>
+        <li><span class="weight-label">Note · <code>tab_blur</code> / info</span> <span class="weight-val">−0</span></li>
+      </ul>
+      <p class="score-breakdown" id="sessionScoreBreakdown">This session: —</p>
+      <aside class="report-disclaimer" role="note">
+        <p><strong>Disclaimer.</strong> This score is a soft-proctoring heuristic for human review —
+          not a cheating verdict or academic misconduct finding. Signals can false-positive from
+          posture, lighting, or calibration drift. Review the timeline and evidence before acting.</p>
+      </aside>
+    </section>
+
+    <section class="session-grid" id="sessionBody" hidden>
+      <article class="panel metric-card">
+        <h3>Duration</h3>
+        <p class="metric-value" id="metricDuration">—</p>
+        <p class="metric-hint" id="metricDurationHint">Exam length</p>
+      </article>
+
+      <article class="panel metric-card">
+        <h3>Calibration quality</h3>
+        <p class="metric-value" id="metricCal">—</p>
+        <p class="metric-hint" id="metricCalHint">Accuracy check</p>
+        <div class="cal-bars" id="calBars" hidden>
+          <div class="cal-bar-track">
+            <div class="cal-bar-fill" id="calBarFill"></div>
+          </div>
+          <p class="cal-bar-labels">
+            <span>Tighter</span>
+            <span id="calThresholdLabel">threshold</span>
+            <span>Looser</span>
+          </p>
+        </div>
+      </article>
+
+      <article class="panel metric-card">
+        <h3>Flag counts</h3>
+        <p class="metric-value" id="metricFlags">—</p>
+        <p class="metric-hint" id="metricFlagsHint">Needs review · integrity signals</p>
+      </article>
+
+      <article class="panel timeline-panel">
+        <div class="timeline-head">
+          <h3>Flag timeline</h3>
+          <p class="metric-hint">Chronological integrity signals (for human review — not cheating verdicts)</p>
+        </div>
+        <ol class="flag-timeline" id="flagTimeline"></ol>
+        <p class="timeline-empty" id="timelineEmpty" hidden>No flag events were logged for this session.</p>
+      </article>
+
+      <article class="panel evidence-panel" id="evidencePanel">
+        <div class="timeline-head">
+          <h3>Evidence</h3>
+          <p class="metric-hint" id="evidenceHint">Webcam stills from needs-review / phone_risk integrity signals</p>
+        </div>
+        <div class="evidence-grid" id="evidenceGrid" aria-live="polite"></div>
+        <p class="timeline-empty" id="evidenceEmpty" hidden>No evidence snapshots stored for this session.</p>
+      </article>
+    </section>
+  </div>
+
+  <script src="js/session-detail.js"></script>
+</body>
+</html>

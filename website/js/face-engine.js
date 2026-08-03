@@ -61,11 +61,36 @@
 
   function findVideoElement(preferred) {
     if (preferred && preferred.tagName === 'VIDEO') return preferred;
+    if (global.SideNoteGaze && typeof global.SideNoteGaze.getVideoElement === 'function') {
+      var fromGaze = global.SideNoteGaze.getVideoElement();
+      if (fromGaze) return fromGaze;
+    }
     return (
       document.getElementById('webgazerVideoFeed') ||
       document.querySelector('#webgazerVideoContainer video') ||
       document.querySelector('video')
     );
+  }
+
+  /** WebGazer mounts video asynchronously after begin() — wait briefly. */
+  function waitForVideoElement(preferred, timeoutMs) {
+    timeoutMs = timeoutMs || 8000;
+    return new Promise(function (resolve, reject) {
+      var started = Date.now();
+      function tick() {
+        var video = findVideoElement(preferred);
+        if (video) {
+          resolve(video);
+          return;
+        }
+        if (Date.now() - started >= timeoutMs) {
+          reject(new Error('No video element found for Face Mesh'));
+          return;
+        }
+        global.setTimeout(tick, 200);
+      }
+      tick();
+    });
   }
 
   function estimateHeadPose(landmarks) {
@@ -207,11 +232,8 @@
 
   function start(videoEl) {
     return waitForReady().then(function () {
-      var video = findVideoElement(videoEl);
-      if (!video) {
-        return Promise.reject(new Error('No video element found for Face Mesh'));
-      }
-
+      return waitForVideoElement(videoEl, 8000);
+    }).then(function (video) {
       state.video = video;
       state.active = true;
       state.lastSendMs = 0;

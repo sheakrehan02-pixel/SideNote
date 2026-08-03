@@ -1,0 +1,55 @@
+{
+  "at": "2026-08-03T14:17:10.583Z",
+  "base": "http://127.0.0.1:8000",
+  "studentRuns": [
+    {
+      "student": "Ada Lovelace (E2E-1)",
+      "steps": [
+        "welcome_ready",
+        "checklist",
+        "calibrate",
+        "validate",
+        "exam",
+        "report"
+      ],
+      "sessionId": "15a1c746-7da9-4d9c-ad51-69ab0f350ecb",
+      "score": "100",
+      "ok": true,
+      "summarySnippet": "Session ID: 15a1c746-7da9-4d9c-ad51-69ab0f350ecb\n\nStudent: Ada Lovelace (E2E-1)\n\nEnvironment: Lighting · Distance · Fullscreen confirmed\n\nIntegrity signals: 0 · Needs review: 0\n\nEvidence snapshots: 0 / 8 max\n\nReport saved on the server.",
+      "online": true
+    },
+    {
+      "student": "Grace Hopper (E2E-2)",
+      "steps": [
+        "welcome_ready",
+        "checklist",
+        "calibrate",
+        "validate",
+        "exam",
+        "report"
+      ],
+      "sessionId": "9734feb9-6de8-4dfd-a8d1-d1f92c08f311",
+      "score": "100",
+      "ok": true,
+      "summarySnippet": "Session ID: 9734feb9-6de8-4dfd-a8d1-d1f92c08f311\n\nStudent: Grace Hopper (E2E-2)\n\nEnvironment: Lighting · Distance · Fullscreen confirmed\n\nIntegrity signals: 0 · Needs review: 0\n\nEvidence snapshots: 0 / 8 max\n\nReport saved on the server.",
+      "online": true
+    }
+  ],
+  "reviewer": {
+    "role": "reviewer",
+    "sessionId": "9734feb9-6de8-4dfd-a8d1-d1f92c08f311",
+    "ok": true,
+    "checks": {
+      "sessionsStatus": "7 session(s) found",
+      "student": "Grace Hopper (E2E-2)",
+      "title": "practice-biology",
+      "score": "100",
+      "duration": "2s",
+      "flags": "0 / 0",
+      "scoreBreakdown": "This session: 100 − 0 = 100 (no deductions).",
+      "timelineCount": 0,
+      "explainVisible": true,
+      "disclaimer": "Disclaimer. This score is a soft-proctoring heuristic for human review — not a cheating verdict or academic misconduct finding. Signals can false-positive from posture, lighting, or calibration drift. Review the timeline and evidence before acting."
+    }
+  }
+}

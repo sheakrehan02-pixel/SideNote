@@ -14,6 +14,13 @@
     .score-warn { color: var(--warning); }
     .score-bad { color: var(--danger); }
     code { font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; }
+    tr.session-row { cursor: pointer; transition: background 0.15s; }
+    tr.session-row:hover { background: var(--surface-soft); }
+    tr.session-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+    .row-link {
+      font-weight: 600;
+      white-space: nowrap;
+    }
   </style>
 </head>
 <body>
@@ -24,12 +31,20 @@
     </header>
     <section class="panel">
       <h2>Submitted exam sessions</h2>
-      <p>Requires the backend: <code>python run_server.py</code></p>
+      <p>Requires the backend: <code>python run_server.py</code>. Click a row to open the session timeline.</p>
       <div id="status" class="lib-status">Loading…</div>
       <div id="tableWrap"></div>
     </section>
   </div>
   <script>
+    function escapeHtml(str) {
+      return String(str == null ? '' : str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
     fetch('/api/sessions?limit=100')
       .then(function (r) { return r.json(); })
       .then(function (rows) {
@@ -39,14 +54,42 @@
           document.getElementById('tableWrap').innerHTML = '<p style="color:var(--muted)">No sessions yet. Complete a demo exam first.</p>';
           return;
         }
-        var html = '<table><thead><tr><th>Created</th><th>Status</th><th>Score</th><th>Flags</th><th>Session ID</th></tr></thead><tbody>';
+        var html = '<table><thead><tr>' +
+          '<th>Created</th><th>Student</th><th>Status</th><th>Score</th><th>Needs review / signals</th><th>Session</th><th></th>' +
+          '</tr></thead><tbody>';
         rows.forEach(function (s) {
           var score = s.integrity_score != null ? s.integrity_score : '—';
-          var cls = score >= 80 ? 'score-ok' : score >= 60 ? 'score-warn' : 'score-bad';
-          html += '<tr><td>' + (s.created_at || '') + '</td><td>' + s.status + '</td><td class="' + cls + '">' + score + '</td><td>' + (s.suspicious_count || 0) + '</td><td><code>' + s.id + '</code></td></tr>';
+          var cls = score === '—' ? '' : score >= 80 ? 'score-ok' : score >= 60 ? 'score-warn' : 'score-bad';
+          var student = s.student_name ? String(s.student_name) : '—';
+          var href = 'session.html?id=' + encodeURIComponent(s.id);
+          html += '<tr class="session-row" data-href="' + escapeHtml(href) + '" tabindex="0" role="link" aria-label="Open session ' + escapeHtml(s.id) + '">' +
+            '<td>' + escapeHtml(s.created_at || '') + '</td>' +
+            '<td>' + escapeHtml(student) + '</td>' +
+            '<td>' + escapeHtml(s.status) + '</td>' +
+            '<td class="' + cls + '">' + escapeHtml(score) + '</td>' +
+            '<td>' + (s.suspicious_count || 0) + ' / ' + (s.warning_count || 0) + '</td>' +
+            '<td><code>' + escapeHtml(String(s.id).slice(0, 8)) + '…</code></td>' +
+            '<td><a class="row-link" href="' + escapeHtml(href) + '">View →</a></td>' +
+            '</tr>';
         });
         html += '</tbody></table>';
-        document.getElementById('tableWrap').innerHTML = html;
+        var wrap = document.getElementById('tableWrap');
+        wrap.innerHTML = html;
+
+        wrap.querySelectorAll('tr.session-row').forEach(function (row) {
+          row.addEventListener('click', function (e) {
+            if (e.target.closest('a')) return;
+            var href = row.getAttribute('data-href');
+            if (href) window.location.href = href;
+          });
+          row.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              var href = row.getAttribute('data-href');
+              if (href) window.location.href = href;
+            }
+          });
+        });
       })
       .catch(function () {
         document.getElementById('status').textContent = 'Could not reach backend. Run python run_server.py from project root.';

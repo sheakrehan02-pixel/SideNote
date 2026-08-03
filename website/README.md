@@ -17,6 +17,7 @@ python run_server.py
 |-----|------|
 | http://localhost:8000/demo.html | Proctoring demo |
 | http://localhost:8000/sessions.html | View saved sessions |
+| http://localhost:8000/session.html?id=&lt;uuid&gt; | Session detail (timeline, score, calibration) |
 | http://localhost:8000/api/health | API health check |
 
 **Static-only (no session storage):**

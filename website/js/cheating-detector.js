@@ -9,18 +9,31 @@
  * noise doesn't flip warnings on/off.
  *
  * Co-occurrence: looking_down + hands_in_lap → phone_risk (higher priority).
+ *
+ * FROZEN (week2_tune, 2026-08-03): do not tweak zone/dwell/phone constants
+ * without a new labeled eval — see docs/THRESHOLD_NOTES.md.
  */
 (function (global) {
   'use strict';
 
-  var LAP_ENTER_Y = 0.82;
-  var LAP_EXIT_Y = 0.74;
-  var OFF_ENTER_X = 0.03;
-  var OFF_EXIT_X = 0.06;
-  var SUSPICIOUS_FRAMES = 20;
-  var WARNING_FRAMES = 10;
-  var HISTORY_LEN = 40;
-  var CLEAN_FRAMES_TO_RESET = 8;
+  // --- FROZEN week2_tune — see docs/THRESHOLD_NOTES.md ---
+  // Gaze zones (viewport-normalized). Lap enter above typical exam UI (~0.85).
+  var LAP_ENTER_Y = 0.88;
+  var LAP_EXIT_Y = 0.80;
+  var OFF_ENTER_X = 0.025;
+  var OFF_EXIT_X = 0.08;
+
+  // Dwell windows (frames at demo update rate).
+  var WARNING_FRAMES = 12;
+  var SUSPICIOUS_FRAMES = 22;
+  /** Gaze-only looking_down → suspicious (no hands). Longer than co-occurrence phone_risk. */
+  var DOWN_ALONE_SUSPICIOUS_FRAMES = 26;
+  /** phone_risk (looking_down + hands) escalates a bit sooner — high-value signal. */
+  var PHONE_WARNING_FRAMES = 12;
+  var PHONE_SUSPICIOUS_FRAMES = 18;
+  var HISTORY_LEN = 44;
+  var CLEAN_FRAMES_TO_RESET = 6;
+  // --- end freeze ---
 
   var STATUS_COLORS = {
     ok: '#7a9e6a',
@@ -120,7 +133,31 @@
     this.lastSignals = null;
     /** @type {Object.<string, string>} flag id → ISO startedAt while reason is active */
     this.flagStarts = {};
+    /** When true, update() does not accumulate history or emit scored flags. */
+    this.paused = false;
   }
+
+  CheatingDetector.prototype.pause = function () {
+    this.paused = true;
+    this.history = [];
+    this.flagStarts = {};
+    this.cleanStreak = 0;
+    this.inLapZone = false;
+    this.inOffZone = false;
+  };
+
+  CheatingDetector.prototype.resume = function () {
+    this.paused = false;
+    this.history = [];
+    this.flagStarts = {};
+    this.cleanStreak = 0;
+    this.inLapZone = false;
+    this.inOffZone = false;
+  };
+
+  CheatingDetector.prototype.isPaused = function () {
+    return !!this.paused;
+  };
 
   CheatingDetector.prototype._pushHistory = function (reasons) {
     this.history.push(reasons.slice());
@@ -148,12 +185,13 @@
 
   /**
    * Append hand + co-occurrence reasons.
-   * looking_down + hands_in_lap → phone_risk
+   * phone_risk requires BOTH looking_down (lap gaze zone) AND hands_in_lap.
    */
   CheatingDetector.prototype._appendHandReasons = function (reasons, hands) {
     if (!handsInLap(hands)) return reasons;
 
     reasons.push('hands_in_lap');
+    // Co-occurrence only — never emit phone_risk from hands alone
     if (reasons.indexOf('looking_down') >= 0) {
       reasons.push('phone_risk');
     }
@@ -232,6 +270,10 @@
   };
 
   CheatingDetector.prototype.update = function (input, faceVisibleLegacy) {
+    if (this.paused) {
+      return emptyResult();
+    }
+
     var signals = this._normalizeSignals(input, faceVisibleLegacy);
     this.lastSignals = signals;
 
@@ -276,36 +318,37 @@
     signals = signals || this.lastSignals || {};
     var hands = signals.hands;
 
-    var countDown = this._countReason('looking_down', SUSPICIOUS_FRAMES);
+    var countDown = this._countReason('looking_down', DOWN_ALONE_SUSPICIOUS_FRAMES);
     var countOff = this._countReason('gaze_off_screen', SUSPICIOUS_FRAMES);
     var countFace = this._countReason('face_not_visible', WARNING_FRAMES);
     var warnDown = this._countReason('looking_down', WARNING_FRAMES);
     var warnOff = this._countReason('gaze_off_screen', WARNING_FRAMES);
     var countFaceLong = this._countReason('face_not_visible', SUSPICIOUS_FRAMES);
     var countHands = this._countReason('hands_in_lap', WARNING_FRAMES);
-    var countPhone = this._countReason('phone_risk', SUSPICIOUS_FRAMES);
-    var warnPhone = this._countReason('phone_risk', WARNING_FRAMES);
+    var countPhone = this._countReason('phone_risk', PHONE_SUSPICIOUS_FRAMES);
+    var warnPhone = this._countReason('phone_risk', PHONE_WARNING_FRAMES);
     var warnHandsBrief = this._countReason('hands_in_lap', 4);
 
     var flags = [];
     var flag;
     var phoneMeta = {
       contributing_flags: ['looking_down', 'hands_in_lap'],
-      hand_count: handCount(hands)
+      hand_count: handCount(hands),
+      requires: 'looking_down+hands_in_lap'
     };
 
-    // phone_risk first (co-occurrence) — higher severity / priority than looking_down alone
-    if (countPhone >= SUSPICIOUS_FRAMES) {
-      flag = this._makeFlag('phone_risk', 'suspicious', countPhone, SUSPICIOUS_FRAMES, phoneMeta);
+    // phone_risk first — requires co-occurrence; escalates sooner than gaze-only down
+    if (countPhone >= PHONE_SUSPICIOUS_FRAMES) {
+      flag = this._makeFlag('phone_risk', 'suspicious', countPhone, PHONE_SUSPICIOUS_FRAMES, phoneMeta);
       if (flag) flags.push(flag);
-    } else if (warnPhone >= WARNING_FRAMES && reasons.indexOf('phone_risk') >= 0) {
-      flag = this._makeFlag('phone_risk', 'warning', warnPhone, WARNING_FRAMES, phoneMeta);
+    } else if (warnPhone >= PHONE_WARNING_FRAMES && reasons.indexOf('phone_risk') >= 0) {
+      flag = this._makeFlag('phone_risk', 'warning', warnPhone, PHONE_WARNING_FRAMES, phoneMeta);
       if (flag) flags.push(flag);
     }
 
-    // looking_down — still emitted as contributing signal; phone_risk sorts above it
-    if (countDown >= SUSPICIOUS_FRAMES) {
-      flag = this._makeFlag('looking_down', 'suspicious', countDown, SUSPICIOUS_FRAMES);
+    // looking_down — gaze alone needs longer dwell for suspicious; warning uses WARNING_FRAMES
+    if (countDown >= DOWN_ALONE_SUSPICIOUS_FRAMES) {
+      flag = this._makeFlag('looking_down', 'suspicious', countDown, DOWN_ALONE_SUSPICIOUS_FRAMES);
       if (flag) flags.push(flag);
     } else if (warnDown >= WARNING_FRAMES && reasons.indexOf('looking_down') >= 0) {
       flag = this._makeFlag('looking_down', 'warning', warnDown, WARNING_FRAMES);

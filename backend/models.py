@@ -56,8 +56,17 @@ class CalibrationRequest(BaseModel):
         }
 
 class EventRequest(BaseModel):
+    """Legacy clients may send only status + messages; new fields are optional."""
+
     status: str = Field(pattern="^(ok|warning|suspicious)$")
     messages: list[str] = Field(default_factory=list)
+    flag_id: str | None = Field(default=None, max_length=64)
+    severity: str | None = Field(
+        default=None,
+        pattern="^(ok|info|warning|suspicious)$",
+    )
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    evidence_path: str | None = Field(default=None, max_length=512)
 
 
 class ViewportInfo(BaseModel):
@@ -73,6 +82,7 @@ class SubmitReportRequest(BaseModel):
     events: list[dict[str, Any]] = Field(default_factory=list)
     calibration: dict[str, Any] | None = None
     viewport: ViewportInfo | None = None
+    evidence: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class SessionSummary(BaseModel):
