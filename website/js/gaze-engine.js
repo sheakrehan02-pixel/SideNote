@@ -66,7 +66,7 @@
   }
 
   function isFaceVisible(maxAgeMs) {
-    maxAgeMs = maxAgeMs || 800;
+    maxAgeMs = maxAgeMs == null ? 2200 : maxAgeMs;
     return state.lastFaceTime > 0 && (Date.now() - state.lastFaceTime) < maxAgeMs;
   }
 

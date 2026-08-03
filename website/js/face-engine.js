@@ -22,7 +22,9 @@
   'use strict';
 
   var DEFAULT_CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/';
-  var FRAME_GAP_MS = 66; // ~15 Hz — enough for presence/pose, lighter on CPU
+  var FRAME_GAP_MS = 80; // ~12 Hz — presence/pose; leave CPU for Hands + WebGazer
+  /** How long a Face Mesh hit stays “visible” (MediaPipe can stall under load). */
+  var DEFAULT_FACE_MAX_AGE_MS = 2200;
 
   // MediaPipe Face Mesh landmark indices
   var IDX = {
@@ -72,18 +74,27 @@
     );
   }
 
-  /** WebGazer mounts video asynchronously after begin() — wait briefly. */
+  /** WebGazer mounts video asynchronously after begin() — wait until it has frames. */
   function waitForVideoElement(preferred, timeoutMs) {
     timeoutMs = timeoutMs || 8000;
     return new Promise(function (resolve, reject) {
       var started = Date.now();
       function tick() {
         var video = findVideoElement(preferred);
-        if (video) {
+        if (
+          video &&
+          video.readyState >= 2 &&
+          (video.videoWidth > 0 || video.videoHeight > 0)
+        ) {
           resolve(video);
           return;
         }
         if (Date.now() - started >= timeoutMs) {
+          if (video) {
+            // Element exists but never produced frames — still try (WebGazer may catch up)
+            resolve(video);
+            return;
+          }
           reject(new Error('No video element found for Face Mesh'));
           return;
         }
@@ -186,9 +197,9 @@
 
         faceMesh.setOptions({
           maxNumFaces: 2,
-          refineLandmarks: true,
-          minDetectionConfidence: 0.5,
-          minTrackingConfidence: 0.5
+          refineLandmarks: false, // lighter; presence/pose don't need iris detail
+          minDetectionConfidence: 0.4,
+          minTrackingConfidence: 0.4
         });
         faceMesh.onResults(onResults);
 
@@ -257,8 +268,17 @@
   }
 
   function isFaceVisible(maxAgeMs) {
-    maxAgeMs = maxAgeMs || 800;
+    maxAgeMs = maxAgeMs == null ? DEFAULT_FACE_MAX_AGE_MS : maxAgeMs;
     return state.lastFaceTime > 0 && (Date.now() - state.lastFaceTime) < maxAgeMs;
+  }
+
+  function getLastFaceAgeMs() {
+    if (!state.lastFaceTime) return null;
+    return Date.now() - state.lastFaceTime;
+  }
+
+  function isActive() {
+    return !!state.active;
   }
 
   function getHeadPose() {
@@ -287,9 +307,11 @@
     start: start,
     stop: stop,
     isFaceVisible: isFaceVisible,
+    getLastFaceAgeMs: getLastFaceAgeMs,
     getHeadPose: getHeadPose,
     getFacesCount: getFacesCount,
     getLastLandmarks: getLastLandmarks,
-    isReady: isReady
+    isReady: isReady,
+    isActive: isActive
   };
 })(window);

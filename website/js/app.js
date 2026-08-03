@@ -478,27 +478,48 @@
   }
 
   /**
-   * Face presence: prefer MediaPipe Face Mesh; fall back to WebGazer.
-   * Screen gaze always comes from WebGazer samples in onGaze.
+   * Face presence: fuse MediaPipe Face Mesh + WebGazer.
+   * Face Mesh alone false-negatives under CPU load (or before first hit) while
+   * WebGazer is still tracking eyes — that used to spam face_not_visible and
+   * blocked looking_down / phone_risk / off-screen assessments.
    */
+  var FACE_VISIBLE_MAX_AGE_MS = 2200;
+
   function readFaceVisible(maxAgeMs) {
-    maxAgeMs = maxAgeMs || 900;
+    maxAgeMs = maxAgeMs == null ? FACE_VISIBLE_MAX_AGE_MS : maxAgeMs;
+    var meshVisible = false;
+    var gazeVisible = false;
+
     if (typeof SideNoteFace !== 'undefined' && SideNoteFace.isReady()) {
-      return SideNoteFace.isFaceVisible(maxAgeMs);
+      meshVisible = SideNoteFace.isFaceVisible(maxAgeMs);
     }
     if (typeof SideNoteGaze !== 'undefined') {
-      return SideNoteGaze.isFaceVisible(maxAgeMs);
+      gazeVisible = SideNoteGaze.isFaceVisible(maxAgeMs);
+    }
+
+    // Either source is enough. Prefer requiring at least one when both engines exist.
+    if (typeof SideNoteFace !== 'undefined' && SideNoteFace.isReady()) {
+      return meshVisible || gazeVisible;
+    }
+    if (typeof SideNoteGaze !== 'undefined') {
+      return gazeVisible;
     }
     return true;
   }
 
   function readHeadPose() {
     if (typeof SideNoteFace === 'undefined' || !SideNoteFace.isReady()) return null;
+    // Only trust pose while Mesh itself recently saw a face (not WebGazer fallback)
+    if (!SideNoteFace.isFaceVisible(FACE_VISIBLE_MAX_AGE_MS)) return null;
     return SideNoteFace.getHeadPose();
   }
 
   function readFacesCount() {
     if (typeof SideNoteFace === 'undefined' || !SideNoteFace.isReady()) return null;
+    if (!SideNoteFace.isFaceVisible(FACE_VISIBLE_MAX_AGE_MS)) {
+      // WebGazer may still see a face — report unknown rather than stale 0
+      return null;
+    }
     return SideNoteFace.getFacesCount();
   }
 
@@ -509,10 +530,11 @@
   }
 
   function buildDetectorInput(gazeSample, faceVisible) {
+    var visible = !!faceVisible;
     return {
-      gaze: faceVisible ? gazeSample : null,
-      faceVisible: !!faceVisible,
-      hands: faceVisible ? readHands() : null,
+      gaze: visible ? gazeSample : null,
+      faceVisible: visible,
+      hands: visible ? readHands() : null,
       headPose: readHeadPose(),
       facesCount: readFacesCount()
     };
@@ -576,7 +598,9 @@
       return;
     }
 
-    var faceVisible = readFaceVisible(900);
+    // Fresh gaze sample ⇒ eyes were detected this frame (authoritative for presence)
+    var faceVisible = readFaceVisible(FACE_VISIBLE_MAX_AGE_MS) ||
+      (typeof sample.x === 'number' && typeof sample.y === 'number');
     if (faceVisible) faceMissStreak = 0;
 
     if (showGazeDot && els.gazeDot && faceVisible) {
@@ -600,13 +624,14 @@
       return;
     }
 
-    if (readFaceVisible(900)) {
+    if (readFaceVisible(FACE_VISIBLE_MAX_AGE_MS)) {
       faceMissStreak = 0;
       return;
     }
 
+    // Require sustained absence (~2.5s at 250ms) before escalating — avoid flicker
     faceMissStreak += 1;
-    if (faceMissStreak > 15) {
+    if (faceMissStreak > 10) {
       setProctorStatus(detector.update(buildDetectorInput(null, false)));
     }
   }

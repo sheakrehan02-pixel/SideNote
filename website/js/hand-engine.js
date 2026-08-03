@@ -23,7 +23,7 @@
   'use strict';
 
   var DEFAULT_CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/';
-  var FRAME_GAP_MS = 66; // ~15 Hz
+  var FRAME_GAP_MS = 80; // ~12 Hz — share camera CPU with Face Mesh + WebGazer
   var WRIST_IDX = 0;
   var CHIN_IDX = 152;
   var FOREHEAD_IDX = 10;
@@ -35,7 +35,7 @@
   /** Exit lap when wrist rises above chin + this fraction of face-height */
   var REL_EXIT_FACE_FRAC = 0.10;
   // --- end freeze ---
-  var HANDS_STALE_MS = 400;
+  var HANDS_STALE_MS = 1200;
 
   var state = {
     hands: null,
@@ -104,7 +104,7 @@
       return null;
     }
     if (typeof global.SideNoteFace.isFaceVisible === 'function' &&
-        !global.SideNoteFace.isFaceVisible(900)) {
+        !global.SideNoteFace.isFaceVisible(2200)) {
       return null;
     }
     var lm = global.SideNoteFace.getLastLandmarks();
