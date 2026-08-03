@@ -1,21 +1,11 @@
 clip_id,pred_any_warning,pred_any_suspicious,pred_flag_ids,pred_top_severity,pred_phone_risk,pred_suspicious_count,pred_warning_count,integrity_score,match_primary,match_suspicious,false_suspicious,notes
 20260802_normal_01,0,0,,ok,0,0,0,100,1,1,0,scripted: calm center gaze
-20260802_normal_02,0,0,,ok,0,0,0,100,1,1,0,scripted: mid-page reading y=0.55
 20260802_normal_03,0,0,,ok,0,0,0,100,1,1,0,scripted: lower exam UI y=0.85 (known FP risk)
 20260802_normal_04,0,0,,ok,0,0,0,100,1,1,0,scripted: brief edge glance then back (should not be suspicious)
-20260802_normal_05,0,0,,ok,0,0,0,100,1,1,0,scripted: typing — small gaze drift in content band
-20260802_normal_06,0,0,,ok,0,0,0,100,1,1,0,scripted: upper third reading
 20260802_looking_down_01,1,1,looking_down,suspicious,0,5,14,32,1,1,0,"scripted: sustained lap-zone gaze, hands on keyboard"
 20260802_looking_down_02,1,0,looking_down,warning,0,0,3,94,1,0,0,scripted: repeated down glances
 20260802_looking_down_03,1,1,looking_down,suspicious,0,5,14,32,1,1,0,scripted: phone in lap eyes down (no hands signal)
-20260802_looking_down_04,1,1,looking_down,suspicious,0,3,14,48,1,1,0,scripted: notes on desk — sustained down
 20260802_gaze_off_screen_01,1,1,gaze_off_screen,suspicious,0,7,10,24,1,1,0,scripted: sustained left second-monitor
-20260802_gaze_off_screen_02,1,1,gaze_off_screen,suspicious,0,7,10,24,1,1,0,scripted: sustained right edge
-20260802_gaze_off_screen_03,1,1,gaze_off_screen,suspicious,0,1,11,70,1,1,0,scripted: side look with return then long again
-20260802_gaze_off_screen_04,1,1,gaze_off_screen,suspicious,0,5,10,40,1,1,0,scripted: far left sustained
 20260802_hands_in_lap_01,1,0,hands_in_lap,warning,0,0,14,72,1,1,0,"scripted: hands in lap, eyes on screen (warning ok, not suspicious)"
-20260802_hands_in_lap_02,1,0,hands_in_lap,warning,0,0,11,78,1,1,0,"scripted: hands low, eyes mid-screen"
 20260802_phone_risk_01,1,1,phone_risk|looking_down|hands_in_lap,suspicious,1,8,6,0,1,1,0,scripted: looking_down + hands.inLap co-occurrence
-20260802_phone_risk_02,1,1,phone_risk|looking_down|hands_in_lap,suspicious,1,11,6,0,1,1,0,scripted: sustained phone_risk pattern
 20260802_face_away_01,1,1,face_not_visible,suspicious,0,7,10,24,1,1,0,scripted: leave frame / cover cam sustained
-20260802_face_away_02,1,1,face_not_visible,suspicious,0,4,10,48,1,1,0,scripted: face missing ~25 frames

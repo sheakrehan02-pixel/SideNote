@@ -1,56 +1,73 @@
 {
   "date": "2026-08-03",
-  "tag": "week2_tune",
+  "tag": "day14_subset",
   "batch_id": "w1_scripted_20260802",
   "method": "scripted_detector",
-  "subset": null,
+  "subset": [
+    "20260802_normal_01",
+    "20260802_normal_03",
+    "20260802_normal_04",
+    "20260802_looking_down_01",
+    "20260802_looking_down_02",
+    "20260802_looking_down_03",
+    "20260802_gaze_off_screen_01",
+    "20260802_hands_in_lap_01",
+    "20260802_phone_risk_01",
+    "20260802_face_away_01"
+  ],
   "tune_note": "LAP_ENTER 0.88/0.80; WARNING 12; DOWN_ALONE_SUS 26; PHONE_SUS 18; wrist abs 0.58/0.50 rel 0.22/0.10",
-  "clips": 20,
+  "clips": 10,
   "suspicious": {
-    "tp": 11,
+    "tp": 5,
     "fp": 0,
     "fn": 1,
-    "tn": 8,
+    "tn": 4,
     "precision": 1,
-    "recall": 0.9166666666666666,
-    "f1": 0.9565217391304348
+    "recall": 0.8333333333333334,
+    "f1": 0.9090909090909091
   },
   "phone_risk": {
-    "tp": 2,
+    "tp": 1,
     "fp": 0,
     "fn": 0,
     "precision": 1,
     "recall": 1
   },
-  "false_suspicious_on_normal": "0 / 6",
+  "false_suspicious_on_normal": "0 / 3",
   "by_flag": {
     "looking_down": {
-      "tp": 4,
+      "tp": 3,
       "fp": 0,
       "fn": 0
     },
     "gaze_off_screen": {
-      "tp": 4,
+      "tp": 1,
       "fp": 0,
       "fn": 0
     },
     "hands_in_lap": {
-      "tp": 2,
+      "tp": 1,
       "fp": 0,
       "fn": 0
     },
     "phone_risk": {
-      "tp": 2,
+      "tp": 1,
       "fp": 0,
       "fn": 0
     },
     "face_not_visible": {
-      "tp": 2,
+      "tp": 1,
       "fp": 0,
       "fn": 0
     }
   },
   "biggest_failure_mode": "Intermittent looking_down bursts stay at warning (never reach DOWN_ALONE_SUSPICIOUS_FRAMES=26); lower-exam-UI false suspicious is fixed by LAP_ENTER_Y=0.88.",
-  "day10_freeze_match": true,
-  "regressions_vs_results_csv": []
+  "regressions_vs_results_csv": [],
+  "day10_row_match": true,
+  "subset_gates": {
+    "no_false_suspicious_on_normals": true,
+    "looking_down_02_still_fn_warning": true,
+    "phone_risk_still_fires": true
+  },
+  "subset_pass": true
 }

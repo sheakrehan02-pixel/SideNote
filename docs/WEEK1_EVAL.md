@@ -1,10 +1,14 @@
 # Side Note — Week 1 Eval (Day 7)
 
-**Date:** 2026-08-02  
+**Date:** 2026-08-02 (re-run **2026-08-03**)  
 **Batch:** `w1_scripted_20260802`  
 **Method:** Scripted detector clips via `node scripts/eval_week1.js` (no webcam). Live Method A session JSON should replace these rows when you record real 30–60s clips.
 
 **Artifacts:** `data/eval/labels.csv` · `data/eval/results_week1.csv` · `data/eval/week1_summary.json`
+
+**2026-08-03 re-run / Week 2 tune:** After hysteresis + dwell + wrist + `phone_risk` retune — suspicious **P 100% / R 91.7% / F1 95.7%**; false suspicious on normal **0 / 6**; remaining FN `looking_down_02` (intermittent).
+
+**2026-08-03 Day 14 confirmation:** Full batch + 10-clip subset re-run — **no regression** vs `week2_tune` freeze (same P/R/F1; FP_normal 0/6; row match on subset). Artifacts: `data/eval/day14_subset_summary.json`.
 
 ---
 
