@@ -701,7 +701,7 @@
       return SideNoteGaze.getPassThresholdPx();
     }
     var configured = window.SIDE_NOTE_ACCURACY_THRESHOLD_PX;
-    return typeof configured === 'number' && configured > 0 ? configured : 180;
+    return typeof configured === 'number' && configured > 0 ? configured : 160;
   }
 
   function setExamStartEnabled(enabled) {

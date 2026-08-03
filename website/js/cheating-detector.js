@@ -184,6 +184,48 @@
   };
 
   /**
+   * Head-pose gates (Face Mesh) — reduce gaze-noise FPs without moving zone lines.
+   * pitch > 0 ≈ face angled down; yaw magnitude ≈ head turned L/R.
+   * When headPose is missing (scripted eval / Mesh down), reasons pass through unchanged.
+   */
+  var HEAD_PITCH_DENY_DOWN = -0.05;   // clearly looking up / level-up → not lap
+  var HEAD_PITCH_CONFIRM_DOWN = 0.07; // clearly chin-down → supports looking_down
+  var HEAD_YAW_DENY_OFF = 0.07;       // facing forward → drop edge-gaze flicker
+
+  CheatingDetector.prototype._applyHeadPoseGate = function (reasons, headPose) {
+    if (!headPose || typeof headPose.pitch !== 'number') return reasons;
+
+    var out = reasons.slice();
+    var pitch = headPose.pitch;
+    var yaw = typeof headPose.yaw === 'number' ? headPose.yaw : 0;
+
+    // Gaze drifted to lap zone but head is clearly not looking down → drop
+    if (pitch < HEAD_PITCH_DENY_DOWN && out.indexOf('looking_down') >= 0) {
+      out = out.filter(function (r) { return r !== 'looking_down'; });
+    }
+
+    // Gaze on edge but head still facing the screen → drop off-screen flicker
+    if (Math.abs(yaw) < HEAD_YAW_DENY_OFF && out.indexOf('gaze_off_screen') >= 0) {
+      out = out.filter(function (r) { return r !== 'gaze_off_screen'; });
+    }
+
+    // Strong chin-down while gaze is near lower third but not yet in lap → nudge
+    // (helps intermittent looking_down without lowering LAP_ENTER_Y)
+    if (
+      pitch >= HEAD_PITCH_CONFIRM_DOWN &&
+      out.indexOf('looking_down') < 0 &&
+      this.lastSignals &&
+      this.lastSignals.gaze &&
+      typeof this.lastSignals.gaze.y === 'number'
+    ) {
+      var yNorm = this.lastSignals.gaze.y / (global.innerHeight || 1);
+      if (yNorm > 0.72) out.push('looking_down');
+    }
+
+    return out;
+  };
+
+  /**
    * Append hand + co-occurrence reasons.
    * phone_risk requires BOTH looking_down (lap gaze zone) AND hands_in_lap.
    */
@@ -258,6 +300,19 @@
     var dwell = threshold > 0 ? frameCount / threshold : 0;
     var confidence = clamp01(copy.baseConfidence + Math.min(0.15, dwell * 0.1));
 
+    // Head-pose agreement bumps confidence on gaze flags
+    var pose = this.lastSignals && this.lastSignals.headPose;
+    if (pose && typeof pose.pitch === 'number') {
+      if (id === 'looking_down' || id === 'phone_risk') {
+        if (pose.pitch >= HEAD_PITCH_CONFIRM_DOWN) confidence = clamp01(confidence + 0.08);
+        else if (pose.pitch < HEAD_PITCH_DENY_DOWN) confidence = clamp01(confidence - 0.1);
+      }
+      if (id === 'gaze_off_screen' && typeof pose.yaw === 'number') {
+        if (Math.abs(pose.yaw) >= 0.12) confidence = clamp01(confidence + 0.08);
+        else if (Math.abs(pose.yaw) < HEAD_YAW_DENY_OFF) confidence = clamp01(confidence - 0.1);
+      }
+    }
+
     var flag = {
       id: id,
       severity: severity,
@@ -293,6 +348,9 @@
     var y = gaze.y / global.innerHeight;
 
     reasons = this._zoneReasons(x, y);
+    // Store gaze on lastSignals early so head-pose nudge can read y
+    this.lastSignals = signals;
+    reasons = this._applyHeadPoseGate(reasons, signals.headPose);
     this._appendHandReasons(reasons, signals.hands);
 
     if (!reasons.length) {
@@ -347,7 +405,11 @@
     }
 
     // looking_down — gaze alone needs longer dwell for suspicious; warning uses WARNING_FRAMES
-    if (countDown >= DOWN_ALONE_SUSPICIOUS_FRAMES) {
+    var headDeniesDown =
+      signals.headPose &&
+      typeof signals.headPose.pitch === 'number' &&
+      signals.headPose.pitch < HEAD_PITCH_DENY_DOWN;
+    if (countDown >= DOWN_ALONE_SUSPICIOUS_FRAMES && !headDeniesDown) {
       flag = this._makeFlag('looking_down', 'suspicious', countDown, DOWN_ALONE_SUSPICIOUS_FRAMES);
       if (flag) flags.push(flag);
     } else if (warnDown >= WARNING_FRAMES && reasons.indexOf('looking_down') >= 0) {
@@ -355,7 +417,11 @@
       if (flag) flags.push(flag);
     }
 
-    if (countOff >= SUSPICIOUS_FRAMES) {
+    var headDeniesOff =
+      signals.headPose &&
+      typeof signals.headPose.yaw === 'number' &&
+      Math.abs(signals.headPose.yaw) < HEAD_YAW_DENY_OFF;
+    if (countOff >= SUSPICIOUS_FRAMES && !headDeniesOff) {
       flag = this._makeFlag('gaze_off_screen', 'suspicious', countOff, SUSPICIOUS_FRAMES);
       if (flag) flags.push(flag);
     } else if (warnOff >= WARNING_FRAMES && reasons.indexOf('gaze_off_screen') >= 0) {

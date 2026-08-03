@@ -141,7 +141,7 @@
       <h2>Accuracy check <span style="font-weight:400;color:var(--muted);font-size:0.9em">(required)</span></h2>
       <p>
         Gaze tracking must pass before the exam starts.
-        Target: average error under <strong id="accuracyThresholdLabel">180</strong> px
+        Target: average error under <strong id="accuracyThresholdLabel">160</strong> px
         (configurable via <code>SIDE_NOTE_ACCURACY_THRESHOLD_PX</code>).
       </p>
       <div class="btn-row">
@@ -267,7 +267,7 @@
 
   <!-- Accuracy gate: avg gaze error must be ≤ this (px) to start exam. -->
   <script>
-    window.SIDE_NOTE_ACCURACY_THRESHOLD_PX = 180;
+    window.SIDE_NOTE_ACCURACY_THRESHOLD_PX = 160;
   </script>
 
   <!-- MediaPipe Face Mesh (jsDelivr). WASM/.data assets resolve via SIDE_NOTE_FACE_MESH_CDN + locateFile. -->

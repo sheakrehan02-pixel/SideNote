@@ -86,7 +86,7 @@ phone_risk = looking_down AND hands_in_lap only
 
 | Constant / gate | Before | After | Why |
 |-----------------|--------|-------|-----|
-| Accuracy pass threshold | Soft / optional (~180 mentioned in copy) | **Hard gate** `SIDE_NOTE_ACCURACY_THRESHOLD_PX` default **180** | Failed cal cannot start exam |
+| Accuracy pass threshold | Soft / optional (~180 mentioned in copy) | **Hard gate** default **160** (`SIDE_NOTE_ACCURACY_THRESHOLD_PX`) | Failed cal cannot start exam; denser bursts + median validation |
 | “Continue anyway” | Present | **Removed** | Garbage gaze → garbage flags |
 | Student identity | Optional | **Required** (≥2 chars name/email) | Session attribution |
 | Environment checklist | Soft tips | **Hard confirm** lighting + distance + fullscreen | Setup quality before calibrate |
@@ -177,6 +177,7 @@ Artifacts: `data/eval/results_week1.csv` · `data/eval/week1_summary.json` (tag 
 | 2026-08-03 | `week2_tune` | Raised lap enter, longer gaze-only down suspicious, faster `phone_risk`, stricter wrist cutoffs — P **100%**, FP_normal **0/6**. |
 | 2026-08-03 | **FREEZE** | Thresholds frozen for the week — no vibes-based tweaks; next change requires labeled eval + before/after. |
 | 2026-08-03 | Day 14 re-run | Full 20 + 10-clip subset (`day14_subset`) — **no regression**; still P **100%** / R **91.7%** / F1 **95.7%**; FP_normal **0/6**. |
+| 2026-08-03 | `accuracy_v1` | Gaze: adaptive EMA + outlier hold, 6-sample cal bursts, weightedRidge, pass gate **160 px** + median validation. Integrity: Face Mesh head-pose gates (deny false lap/edge; confirm chin-down). Zone/dwell/`phone_risk` constants **unchanged** — scripted eval still P100/R91.7/F1 95.7. |
 
 When you retune, append:
 

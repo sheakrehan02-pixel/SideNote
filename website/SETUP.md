@@ -77,7 +77,7 @@ The demo has 6 steps (dots at the top):
 
 ### 4. Accuracy check
 - Look at each test dot (**do not click**)
-- Target: average error **under ~180 px**
+- Target: average error **under ~160 px**
 - If it fails → **Recalibrate** with better lighting
 
 ### 5. Practice exam
@@ -116,7 +116,7 @@ HTTPS is required for camera on non-localhost URLs.
 - Check camera preview — is your face detected?
 
 ### Dot moves but is inaccurate
-- Run **accuracy check**; if &gt; 180 px, recalibrate
+- Run **accuracy check**; if &gt; 160 px, recalibrate
 - Use `weightedRidge` (already configured in this project)
 - Sit still; recalibrate if you change posture or screen brightness
 

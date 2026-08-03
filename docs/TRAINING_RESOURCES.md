@@ -67,6 +67,28 @@ The **Mendeley dataset** is especially useful: it already has hand tracking, hea
 - **Gaze360:** *Gaze360: Physically Unconstrained Gaze Estimation in the Wild* (ICCV 2019).  
 - **Proctoring:** *Multimodal Transformer Framework for Real-Time Cheating Detection in Online Assessments* (Springer); *Students suspicious behaviors detection dataset for AI-powered online exam proctoring* (Mendeley Data).
 
+## 7. What to collect for Side Note (highest value)
+
+Large public gaze datasets (ETH-XGaze, etc.) help **research models**, not the current WebGazer demo overnight. For the next accuracy jump, send **your** clips:
+
+### Preferred (upload or drop in `data/eval/clips/`)
+
+| Item | Spec |
+|------|------|
+| Format | 30–60s webcam video **or** exported session JSON from the demo |
+| Lighting | Front-lit face (same as pilot) |
+| Labels | Per clip: `normal` · `looking_down` · `gaze_off_screen` · `hands_in_lap` · `phone_risk` · `face_away` |
+| Count | Aim for **≥20** labeled clips (mix of honest + suspicious) |
+| Browser | Chrome, maximized, after a **passed** accuracy check |
+
+### Optional public sets (if you have bandwidth)
+
+1. **[Mendeley suspicious behaviors](https://data.mendeley.com/datasets/39xs8th543)** — best match for integrity features (hands/pose/gaze).  
+2. **[MSU OEP](http://cvlab.cse.msu.edu/oep-dataset.html)** — timed cheating behaviors.  
+3. **MPIIGaze / ETH-XGaze** — only if we train a custom gaze net (multi‑GB; Week 3+).
+
+You do **not** need to download those for the current demo — the `accuracy_v1` pipeline upgrades are already in the web client.
+
 ---
 
 ## Quick links

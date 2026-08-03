@@ -4,9 +4,15 @@
 (function (global) {
   'use strict';
 
-  var SMOOTH_ALPHA = 0.25;
-  var CAL_BURST_SAMPLES = 4;
-  var CAL_BURST_GAP_MS = 160;
+  // Adaptive EMA: quieter when stable, snappier on real saccades
+  var SMOOTH_ALPHA_STABLE = 0.14;
+  var SMOOTH_ALPHA_SACCADE = 0.42;
+  var SACCADE_PX = 90;
+  /** Ignore one-frame teleport jumps unless confirmed by the next sample */
+  var OUTLIER_JUMP_FRAC = 0.32;
+  var CAL_BURST_SAMPLES = 6;
+  var CAL_BURST_GAP_MS = 130;
+  var CAL_SETTLE_MS = 450;
   var CAL_POINTS = [
     [0.08, 0.08], [0.5, 0.08], [0.92, 0.08],
     [0.08, 0.5], [0.5, 0.5], [0.92, 0.5],
@@ -24,7 +30,8 @@
     rafId: null,
     lastFaceTime: 0,
     lastDeliverMs: 0,
-    trainingPoints: 0
+    trainingPoints: 0,
+    pendingOutlier: null
   };
 
   function hasWebGazer() {
@@ -46,19 +53,67 @@
   function smoothGaze(raw) {
     var b = boundGaze(raw);
     if (!b) return null;
+
     if (state.smoothX == null) {
       state.smoothX = b.x;
       state.smoothY = b.y;
-    } else {
-      state.smoothX = state.smoothX + SMOOTH_ALPHA * (b.x - state.smoothX);
-      state.smoothY = state.smoothY + SMOOTH_ALPHA * (b.y - state.smoothY);
+      state.pendingOutlier = null;
+      return { x: state.smoothX, y: state.smoothY, raw: b };
     }
+
+    var jump = Math.sqrt(
+      Math.pow(b.x - state.smoothX, 2) + Math.pow(b.y - state.smoothY, 2)
+    );
+    var maxDim = Math.max(global.innerWidth || 1, global.innerHeight || 1);
+    var outlierThresh = OUTLIER_JUMP_FRAC * maxDim;
+
+    // One-frame teleport → hold last smooth until a second sample agrees
+    if (jump > outlierThresh) {
+      if (
+        !state.pendingOutlier ||
+        Math.sqrt(
+          Math.pow(b.x - state.pendingOutlier.x, 2) +
+          Math.pow(b.y - state.pendingOutlier.y, 2)
+        ) > outlierThresh * 0.5
+      ) {
+        state.pendingOutlier = { x: b.x, y: b.y };
+        return { x: state.smoothX, y: state.smoothY, raw: b, held: true };
+      }
+      // Confirmed jump (saccade) — accept and catch up quickly
+      state.pendingOutlier = null;
+    } else {
+      state.pendingOutlier = null;
+    }
+
+    var alpha = jump >= SACCADE_PX ? SMOOTH_ALPHA_SACCADE : SMOOTH_ALPHA_STABLE;
+    state.smoothX = state.smoothX + alpha * (b.x - state.smoothX);
+    state.smoothY = state.smoothY + alpha * (b.y - state.smoothY);
     return { x: state.smoothX, y: state.smoothY, raw: b };
   }
 
   function resetSmoothing() {
     state.smoothX = null;
     state.smoothY = null;
+    state.pendingOutlier = null;
+  }
+
+  function median(nums) {
+    if (!nums || !nums.length) return null;
+    var sorted = nums.slice().sort(function (a, b) { return a - b; });
+    var mid = Math.floor(sorted.length / 2);
+    if (sorted.length % 2) return sorted[mid];
+    return (sorted[mid - 1] + sorted[mid]) / 2;
+  }
+
+  /** Trimmed mean — drop highest/lowest when n≥5 for stabler validation error */
+  function robustAverage(nums) {
+    if (!nums || !nums.length) return null;
+    if (nums.length < 5) {
+      return nums.reduce(function (a, n) { return a + n; }, 0) / nums.length;
+    }
+    var sorted = nums.slice().sort(function (a, b) { return a - b; });
+    var trimmed = sorted.slice(1, sorted.length - 1);
+    return trimmed.reduce(function (a, n) { return a + n; }, 0) / trimmed.length;
   }
 
   function markFaceSeen() {
@@ -327,8 +382,9 @@
     }
 
     if (typeof wg.setRegression === 'function') {
-      try { wg.setRegression('ridge'); } catch (e1) {
-        try { wg.setRegression('weightedRidge'); } catch (e2) {}
+      // weightedRidge uses recent points more — better after multi-sample bursts
+      try { wg.setRegression('weightedRidge'); } catch (e1) {
+        try { wg.setRegression('ridge'); } catch (e2) {}
       }
     }
     if (typeof wg.setTracker === 'function') {
@@ -620,14 +676,25 @@
             e.preventDefault();
             e.stopPropagation();
           }
-          if (phaseEl) phaseEl.textContent = 'Recording… keep looking at the circle';
-          if (samplesEl) samplesEl.textContent = 'Saving samples…';
+          if (phaseEl) phaseEl.textContent = 'Hold still… settling on the circle';
+          if (samplesEl) samplesEl.textContent = 'Keep looking — recording starts in a moment';
           if (target) target.disabled = true;
 
-          recordBurst(px, py, CAL_BURST_SAMPLES).then(function (n) {
+          waitMs(CAL_SETTLE_MS).then(function () {
+            if (phaseEl) phaseEl.textContent = 'Recording… keep looking at the circle';
+            if (samplesEl) samplesEl.textContent = 'Saving samples…';
+            return recordBurst(px, py, CAL_BURST_SAMPLES);
+          }).then(function (n) {
             if (n === 0) {
               if (phaseEl) phaseEl.textContent = 'Could not read your eyes — face the camera and try again';
               if (samplesEl) samplesEl.textContent = 'Make sure your face is lit and visible in the preview';
+              if (target) target.disabled = false;
+              done = false;
+              return;
+            }
+            if (n < 3) {
+              if (phaseEl) phaseEl.textContent = 'Only ' + n + ' samples — try again, eyes on the circle';
+              if (samplesEl) samplesEl.textContent = 'Better lighting / face the camera, then click again';
               if (target) target.disabled = false;
               done = false;
               return;
@@ -661,14 +728,14 @@
 
   /**
    * Accuracy gate threshold (px). Override with window.SIDE_NOTE_ACCURACY_THRESHOLD_PX.
-   * Default 180 — avg gaze error must be under this to start the exam.
+   * Default 160 — tighter than the old 180 after denser calibration bursts.
    */
   function getPassThresholdPx() {
     var configured = global.SIDE_NOTE_ACCURACY_THRESHOLD_PX;
     if (typeof configured === 'number' && isFinite(configured) && configured > 0) {
       return configured;
     }
-    return 180;
+    return 160;
   }
 
   function warmupAfterCalibration(ms) {
@@ -719,11 +786,11 @@
       var gazeDot = document.getElementById('valGazeDot');
       resetSmoothing();
 
-      return waitMs(1000).then(function () {
+      return waitMs(1100).then(function () {
         if (phaseEl) phaseEl.textContent = 'Hold steady — measuring…';
         var samples = [];
         var start = Date.now();
-        var SAMPLE_MS = 1800;
+        var SAMPLE_MS = 2200;
 
         return new Promise(function (done) {
           var interval = global.setInterval(function () {
@@ -738,9 +805,9 @@
                 }
                 var err = Math.sqrt(Math.pow(b.x - px, 2) + Math.pow(b.y - py, 2));
                 if (liveEl) liveEl.textContent = 'Offset: ' + Math.round(err) + ' px';
-                if (elapsed > 500) {
+                if (elapsed > 600) {
                   var s = smoothGaze(b);
-                  if (s) samples.push(s);
+                  if (s && !s.held) samples.push(s);
                 }
               } else if (liveEl && elapsed > 800) {
                 liveEl.textContent = 'No gaze yet — face the camera';
@@ -749,16 +816,18 @@
 
             if (elapsed > SAMPLE_MS) {
               global.clearInterval(interval);
-              if (samples.length >= 2) {
-                var avgX = samples.reduce(function (a, s) { return a + s.x; }, 0) / samples.length;
-                var avgY = samples.reduce(function (a, s) { return a + s.y; }, 0) / samples.length;
-                errors.push(Math.sqrt(Math.pow(avgX - px, 2) + Math.pow(avgY - py, 2)));
+              if (samples.length >= 3) {
+                var xs = samples.map(function (s) { return s.x; });
+                var ys = samples.map(function (s) { return s.y; });
+                var mx = median(xs);
+                var my = median(ys);
+                errors.push(Math.sqrt(Math.pow(mx - px, 2) + Math.pow(my - py, 2)));
               } else {
                 errors.push(null);
               }
               done();
             }
-          }, 50);
+          }, 40);
         });
       }).then(function () {
         return waitMs(250).then(function () { return sampleAtPoint(index + 1); });
@@ -772,19 +841,23 @@
       resetSmoothing();
 
       var validErrors = errors.filter(function (e) { return e != null; });
-      var avg = validErrors.length
-        ? validErrors.reduce(function (a, e) { return a + e; }, 0) / validErrors.length
-        : null;
+      var avg = robustAverage(validErrors);
+      var med = median(validErrors);
       var pointsUnderThreshold = validErrors.filter(function (e) { return e < passThreshold; }).length;
 
       return {
         errors: errors,
         avgErrorPx: avg,
+        medianErrorPx: med,
         passThresholdPx: passThreshold,
         pointsMeasured: validErrors.length,
         pointsUnderThreshold: pointsUnderThreshold,
-        // Hard gate: enough samples and average error at or under configured threshold
-        passed: validErrors.length >= 5 && avg != null && avg <= passThreshold,
+        // Hard gate: enough points, robust avg under threshold, majority of points good
+        passed:
+          validErrors.length >= 6 &&
+          avg != null &&
+          avg <= passThreshold &&
+          pointsUnderThreshold >= 5,
         noTracking: validErrors.length === 0
       };
     });

@@ -46,7 +46,7 @@ python run_server.py
 - **Gates** — identity, environment checklist, hard calibration pass before exam start
 - **Resilience** — camera-loss pause, offline “session not saved” banner, tab-blur soft info (gaze paused while hidden)
 - **Instructor review** — session report, score weight explanation, evidence gallery
-- **Frozen thresholds** — tag `week2_tune` (2026-08-03): scripted suspicious **P 100% / R 91.7% / F1 95.7%**; false suspicious on normal **0/6**. See [`docs/THRESHOLD_NOTES.md`](docs/THRESHOLD_NOTES.md) · [`docs/WEEK1_EVAL.md`](docs/WEEK1_EVAL.md)
+- **Frozen thresholds** — tag `week2_tune` zones + `accuracy_v1` gaze/head-pose upgrades (2026-08-03): scripted suspicious **P 100% / R 91.7% / F1 95.7%**; false suspicious on normal **0/6**. See [`docs/THRESHOLD_NOTES.md`](docs/THRESHOLD_NOTES.md) · [`docs/WEEK1_EVAL.md`](docs/WEEK1_EVAL.md)
 
 ---
 
