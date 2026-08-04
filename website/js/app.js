@@ -33,6 +33,7 @@
     looking_down: 'Looking down (desk / lap)',
     gaze_off_screen: 'Gaze off-screen (side)',
     face_not_visible: 'Face not visible',
+    multiple_faces: 'Multiple faces in frame',
     hands_in_lap: 'Hands low / in lap zone',
     phone_risk: 'Possible phone / notes in lap',
     tab_blur: 'Left exam tab'

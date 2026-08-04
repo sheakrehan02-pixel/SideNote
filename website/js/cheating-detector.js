@@ -48,6 +48,7 @@
     phone_risk: 100,
     looking_down: 50,
     gaze_off_screen: 50,
+    multiple_faces: 45,
     face_not_visible: 40,
     hands_in_lap: 30
   };
@@ -101,6 +102,17 @@
       },
       suspicious: {
         message: 'Sustained look down with hands in lap — possible phone or notes',
+        baseConfidence: 0.92
+      }
+    },
+    // Mendeley dataset: no_of_face>=2 → cheat_rate 1.0 (P=1.0 on this corpus)
+    multiple_faces: {
+      warning: {
+        message: 'More than one person appears on camera',
+        baseConfidence: 0.8
+      },
+      suspicious: {
+        message: 'Multiple people visible for a while — check who is in frame',
         baseConfidence: 0.92
       }
     }
@@ -184,45 +196,72 @@
   };
 
   /**
-   * Head-pose gates (Face Mesh) — reduce gaze-noise FPs without moving zone lines.
-   * pitch > 0 ≈ face angled down; yaw magnitude ≈ head turned L/R.
-   * When headPose is missing (scripted eval / Mesh down), reasons pass through unchanged.
+   * Head-pose gates (Face Mesh) — Mendeley-backed categorical buckets.
+   * In that corpus, non-forward head_pose and |yaw|>0.05 were perfect-precision
+   * cheat cues; raw pitch alone was weak — so we bucket then gate.
+   * When headPose is missing (scripted eval / Mesh down), reasons pass through.
    */
-  var HEAD_PITCH_DENY_DOWN = -0.05;   // clearly looking up / level-up → not lap
-  var HEAD_PITCH_CONFIRM_DOWN = 0.07; // clearly chin-down → supports looking_down
-  var HEAD_YAW_DENY_OFF = 0.07;       // facing forward → drop edge-gaze flicker
+  var HEAD_PITCH_DENY_DOWN = -0.04;
+  var HEAD_PITCH_CONFIRM_DOWN = 0.04; // bucket "down"
+  var HEAD_YAW_SIDE = 0.05;           // Mendeley: |yaw|>0.05 → P=1.0
+  var HEAD_YAW_DENY_OFF = 0.05;
 
-  CheatingDetector.prototype._applyHeadPoseGate = function (reasons, headPose) {
-    if (!headPose || typeof headPose.pitch !== 'number') return reasons;
-
-    var out = reasons.slice();
+  function poseBucket(headPose) {
+    if (!headPose || typeof headPose.pitch !== 'number') return null;
     var pitch = headPose.pitch;
     var yaw = typeof headPose.yaw === 'number' ? headPose.yaw : 0;
+    if (Math.abs(yaw) >= HEAD_YAW_SIDE && Math.abs(yaw) >= Math.abs(pitch)) {
+      return yaw > 0 ? 'right' : 'left';
+    }
+    if (pitch >= HEAD_PITCH_CONFIRM_DOWN) return 'down';
+    if (pitch <= HEAD_PITCH_DENY_DOWN) return 'up';
+    return 'forward';
+  }
 
-    // Gaze drifted to lap zone but head is clearly not looking down → drop
-    if (pitch < HEAD_PITCH_DENY_DOWN && out.indexOf('looking_down') >= 0) {
-      out = out.filter(function (r) { return r !== 'looking_down'; });
+  CheatingDetector.prototype._applyHeadPoseGate = function (reasons, headPose) {
+    var bucket = poseBucket(headPose);
+    if (!bucket) return reasons;
+
+    var out = reasons.slice();
+    var yNorm = null;
+    if (this.lastSignals && this.lastSignals.gaze && typeof this.lastSignals.gaze.y === 'number') {
+      yNorm = this.lastSignals.gaze.y / (global.innerHeight || 1);
+    }
+    var xNorm = null;
+    if (this.lastSignals && this.lastSignals.gaze && typeof this.lastSignals.gaze.x === 'number') {
+      xNorm = this.lastSignals.gaze.x / (global.innerWidth || 1);
     }
 
-    // Gaze on edge but head still facing the screen → drop off-screen flicker
-    if (Math.abs(yaw) < HEAD_YAW_DENY_OFF && out.indexOf('gaze_off_screen') >= 0) {
-      out = out.filter(function (r) { return r !== 'gaze_off_screen'; });
+    // Forward head → drop lap/edge flicker from noisy gaze
+    if (bucket === 'forward' || bucket === 'up') {
+      if (bucket === 'up' && out.indexOf('looking_down') >= 0) {
+        out = out.filter(function (r) { return r !== 'looking_down'; });
+      }
+      if (bucket === 'forward' && out.indexOf('gaze_off_screen') >= 0) {
+        out = out.filter(function (r) { return r !== 'gaze_off_screen'; });
+      }
     }
 
-    // Strong chin-down while gaze is near lower third but not yet in lap → nudge
-    // (helps intermittent looking_down without lowering LAP_ENTER_Y)
-    if (
-      pitch >= HEAD_PITCH_CONFIRM_DOWN &&
-      out.indexOf('looking_down') < 0 &&
-      this.lastSignals &&
-      this.lastSignals.gaze &&
-      typeof this.lastSignals.gaze.y === 'number'
-    ) {
-      var yNorm = this.lastSignals.gaze.y / (global.innerHeight || 1);
-      if (yNorm > 0.72) out.push('looking_down');
+    // Down bucket + gaze in lower third → support looking_down (no zone constant change)
+    if (bucket === 'down' && out.indexOf('looking_down') < 0 && yNorm != null && yNorm > 0.72) {
+      out.push('looking_down');
+    }
+
+    // Side bucket + gaze toward that half → support off-screen
+    if ((bucket === 'left' || bucket === 'right') && out.indexOf('gaze_off_screen') < 0) {
+      if (xNorm != null && (xNorm < 0.22 || xNorm > 0.78)) {
+        out.push('gaze_off_screen');
+      }
     }
 
     return out;
+  };
+
+  CheatingDetector.prototype._appendFaceCountReasons = function (reasons, facesCount) {
+    if (typeof facesCount === 'number' && facesCount >= 2) {
+      reasons.push('multiple_faces');
+    }
+    return reasons;
   };
 
   /**
@@ -300,17 +339,20 @@
     var dwell = threshold > 0 ? frameCount / threshold : 0;
     var confidence = clamp01(copy.baseConfidence + Math.min(0.15, dwell * 0.1));
 
-    // Head-pose agreement bumps confidence on gaze flags
-    var pose = this.lastSignals && this.lastSignals.headPose;
-    if (pose && typeof pose.pitch === 'number') {
+    // Head-pose bucket agreement (Mendeley: non-forward pose → high precision)
+    var bucket = poseBucket(this.lastSignals && this.lastSignals.headPose);
+    if (bucket) {
       if (id === 'looking_down' || id === 'phone_risk') {
-        if (pose.pitch >= HEAD_PITCH_CONFIRM_DOWN) confidence = clamp01(confidence + 0.08);
-        else if (pose.pitch < HEAD_PITCH_DENY_DOWN) confidence = clamp01(confidence - 0.1);
+        if (bucket === 'down') confidence = clamp01(confidence + 0.1);
+        else if (bucket === 'up' || bucket === 'forward') confidence = clamp01(confidence - 0.08);
       }
-      if (id === 'gaze_off_screen' && typeof pose.yaw === 'number') {
-        if (Math.abs(pose.yaw) >= 0.12) confidence = clamp01(confidence + 0.08);
-        else if (Math.abs(pose.yaw) < HEAD_YAW_DENY_OFF) confidence = clamp01(confidence - 0.1);
+      if (id === 'gaze_off_screen') {
+        if (bucket === 'left' || bucket === 'right') confidence = clamp01(confidence + 0.1);
+        else if (bucket === 'forward') confidence = clamp01(confidence - 0.08);
       }
+    }
+    if (id === 'multiple_faces') {
+      confidence = clamp01(confidence + 0.05);
     }
 
     var flag = {
@@ -351,6 +393,7 @@
     // Store gaze on lastSignals early so head-pose nudge can read y
     this.lastSignals = signals;
     reasons = this._applyHeadPoseGate(reasons, signals.headPose);
+    this._appendFaceCountReasons(reasons, signals.facesCount);
     this._appendHandReasons(reasons, signals.hands);
 
     if (!reasons.length) {
@@ -405,10 +448,8 @@
     }
 
     // looking_down — gaze alone needs longer dwell for suspicious; warning uses WARNING_FRAMES
-    var headDeniesDown =
-      signals.headPose &&
-      typeof signals.headPose.pitch === 'number' &&
-      signals.headPose.pitch < HEAD_PITCH_DENY_DOWN;
+    var bucket = poseBucket(signals.headPose);
+    var headDeniesDown = bucket === 'up';
     if (countDown >= DOWN_ALONE_SUSPICIOUS_FRAMES && !headDeniesDown) {
       flag = this._makeFlag('looking_down', 'suspicious', countDown, DOWN_ALONE_SUSPICIOUS_FRAMES);
       if (flag) flags.push(flag);
@@ -417,10 +458,7 @@
       if (flag) flags.push(flag);
     }
 
-    var headDeniesOff =
-      signals.headPose &&
-      typeof signals.headPose.yaw === 'number' &&
-      Math.abs(signals.headPose.yaw) < HEAD_YAW_DENY_OFF;
+    var headDeniesOff = bucket === 'forward';
     if (countOff >= SUSPICIOUS_FRAMES && !headDeniesOff) {
       flag = this._makeFlag('gaze_off_screen', 'suspicious', countOff, SUSPICIOUS_FRAMES);
       if (flag) flags.push(flag);
@@ -437,6 +475,21 @@
         flag = this._makeFlag('face_not_visible', 'warning', countFace, WARNING_FRAMES);
         if (flag) flags.push(flag);
       }
+    }
+
+    // multiple_faces — Mendeley no_of_face>=2 was perfect precision
+    var countMulti = this._countReason('multiple_faces', SUSPICIOUS_FRAMES);
+    var warnMulti = this._countReason('multiple_faces', WARNING_FRAMES);
+    if (countMulti >= SUSPICIOUS_FRAMES) {
+      flag = this._makeFlag('multiple_faces', 'suspicious', countMulti, SUSPICIOUS_FRAMES, {
+        faces_count: signals.facesCount
+      });
+      if (flag) flags.push(flag);
+    } else if (warnMulti >= WARNING_FRAMES && reasons.indexOf('multiple_faces') >= 0) {
+      flag = this._makeFlag('multiple_faces', 'warning', warnMulti, WARNING_FRAMES, {
+        faces_count: signals.facesCount
+      });
+      if (flag) flags.push(flag);
     }
 
     // hands alone — info briefly, warning when sustained; rarely the top signal

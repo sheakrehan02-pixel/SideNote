@@ -67,6 +67,19 @@ The **Mendeley dataset** is especially useful: it already has hand tracking, hea
 - **Gaze360:** *Gaze360: Physically Unconstrained Gaze Estimation in the Wild* (ICCV 2019).  
 - **Proctoring:** *Multimodal Transformer Framework for Real-Time Cheating Detection in Online Assessments* (Springer); *Students suspicious behaviors detection dataset for AI-powered online exam proctoring* (Mendeley Data).
 
+
+
+### Local copy (this repo)
+
+If present: `data/datasets/mendeley_suspicious_behaviors/dataset_v1.csv`
+
+```bash
+python3 scripts/analyze_mendeley_behaviors.py
+# → data/datasets/mendeley_suspicious_behaviors/insights.json
+```
+
+**What we learned (accuracy_v2):** missing face, phone present, non-forward head pose, corner gaze, and `no_of_face≥2` were **perfect precision** on this corpus; hands-low alone was weak (keep `phone_risk` co-occurrence). Soft score F1 ≈ **0.80**.
+
 ## 7. What to collect for Side Note (highest value)
 
 Large public gaze datasets (ETH-XGaze, etc.) help **research models**, not the current WebGazer demo overnight. For the next accuracy jump, send **your** clips:

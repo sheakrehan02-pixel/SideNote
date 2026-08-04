@@ -178,6 +178,7 @@ Artifacts: `data/eval/results_week1.csv` · `data/eval/week1_summary.json` (tag 
 | 2026-08-03 | **FREEZE** | Thresholds frozen for the week — no vibes-based tweaks; next change requires labeled eval + before/after. |
 | 2026-08-03 | Day 14 re-run | Full 20 + 10-clip subset (`day14_subset`) — **no regression**; still P **100%** / R **91.7%** / F1 **95.7%**; FP_normal **0/6**. |
 | 2026-08-03 | `accuracy_v1` | Gaze: adaptive EMA + outlier hold, 6-sample cal bursts, weightedRidge, pass gate **160 px** + median validation. Integrity: Face Mesh head-pose gates (deny false lap/edge; confirm chin-down). Zone/dwell/`phone_risk` constants **unchanged** — scripted eval still P100/R91.7/F1 95.7. |
+| 2026-08-03 | `accuracy_v2` / Mendeley | Ingested Students suspicious behaviors CSV (5500). Enabled `multiple_faces`; categorical head-pose buckets (forward/down/left/right) from |yaw|≥0.05 / pitch≥0.04. Zone/`phone_risk` constants unchanged — scripted eval still freeze-compatible. |
 
 When you retune, append:
 

@@ -111,7 +111,7 @@ When the same behavior escalates over time, emit **one** `flag_id` that upgrades
 | **Trigger** | Face Mesh / detector reports ≥2 distinct faces for N frames |
 | **Signals** | MediaPipe Face Detection or Face Mesh multi-face |
 | **Evidence required** | **Yes**: frame clearly showing multiple faces + timestamp |
-| **Status** | Not implemented — optional stretch |
+| **Status** | Implemented (web) — Face Mesh `facesCount >= 2`; Mendeley `no_of_face>=2` was P=1.0 |
 
 ---
 
